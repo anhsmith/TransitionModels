@@ -5,7 +5,7 @@ format: html
 
 
 
-Model 1: Bayesian Logistic Regression
+### Model 1: Bayesian Logistic Regression
 
 The model assumes a logistic regression framework where the probability of class 1, denoted as $( P(y=1 \mid X) )$, is modeled using a sigmoid function. The log-odds of $(P(y=1 \mid X))$ is modeled as a linear function of the predictor variable $X$, and the model parameters are estimated using Bayesian inference techniques.
 
@@ -13,7 +13,7 @@ $$
 \text{logit}(P(y=1 \mid X)) = \beta_0 + \beta_1X
 $$
 
-Model 2: Bayesian Generative Model with Transition Point
+### Model 2: Bayesian Probit Model with Transition Point
 
 The model introduces a transition point, denoted as $\mu$, which represents the value of $X$ at which the transition from class 0 to class 1 occurs. As $X$ increases, the probability of transitioning from class 0 to class 1 increases. The model assumes a probit link function, where the probability of class 1, $(P(y=1 \mid X))$, is modeled using a cumulative normal distribution with mean $\mu$ and standard deviation $\sigma$.
 
@@ -21,7 +21,7 @@ $$
 P(y=1 \mid X) = \Phi\left(\frac{X-\mu}{\sigma}\right)
 $$
 
-Model 3: Generative Model with Quantiles and Transition Point
+### Model 3: Generative Model with Quantiles and Transition Point
 
 The model extends the previous model by incorporating quantiles and the restriction that the probability of class 0 $(P(y=0 \mid X))$ is equal to 1 minus the probability of class 1 $(P(y=1 \mid X))$. The transition point $\mu$ represents the value of $X$ at which the probabilities of class 0 and class 1 are equal. The model assumes a cumulative probit function for class 1 and calculates the probability of class 0 as $(1 - \Phi\left(\frac{X-\mu}{\sigma}\right))$.
 
@@ -29,7 +29,7 @@ $$
 P(y=1 \mid X) = \Phi\left(\frac{X-\mu}{\sigma}\right), \quad P(y=0 \mid X) = 1 - \Phi\left(\frac{X-\mu}{\sigma}\right)
 $$
 
-Model 4: Generative Model with Quantiles and Complementarity
+### Model 4: Generative Model with Quantiles and Complementarity
 
 The model builds on the previous model by directly modeling the quantiles of class 1 and class 0, with the restriction that one is the complement of the other. The model assumes a cumulative normal distribution for class 0 and calculates the probability of class 1 as $1 - \Phi\left(\frac{X-\mu}{\sigma}\right)$.
 
@@ -37,7 +37,7 @@ $$
 P(y=1 \mid X) = 1 - \Phi\left(\frac{X-\mu}{\sigma}\right), \quad P(y=0 \mid X) = \Phi\left(\frac{X-\mu}{\sigma}\right)
 $$
 
-Model 5: Generative Model with Transition Point and Sensitivity to Imbalance
+### Model 5: Generative Model with Transition Point and Sensitivity to Imbalance
 
 The model extends the previous model by incorporating a sensitivity to unbalanced samples of class 0 and class 1. The log-sum-exp function is used to calculate the likelihood, which combines the probabilities of transitioning from class 0 to class 1 and from class 1 to class 0, weighted by the quantile parameter $\theta$. This formulation ensures that the model assigns equal importance to both transitions and is not biased towards either class. The transition point $\mu$ represents the location of the transition along the predictor variable $X$.
 

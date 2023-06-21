@@ -1,6 +1,6 @@
-# Here's an example of R code that uses the rstan package to fit a Stan model to 
-# simulated datasets with different degrees of class imbalance and examines the 
-# sensitivity of the estimates of the known parameter mu for different 
+# Here's an example of R code that uses the rstan package to fit a Stan model to
+# simulated datasets with different degrees of class imbalance and examines the
+# sensitivity of the estimates of the known parameter mu for different
 # levels of imbalance.
 
 
@@ -25,7 +25,7 @@ model {
   theta ~ beta(1, 1);                 // Prior for quantile parameter
   mu ~ normal(0, 10);                 // Prior for the transition point
   sigma ~ cauchy(0, 5);               // Prior for the scale parameter
-  
+
   // Likelihood
   for (n in 1:N) {
     real eta = (X[n] - mu) / sigma;
@@ -50,17 +50,17 @@ generate_data <- function(n, mu, theta, sigma, imbalance) {
   # Determine the number of samples for each class
   n0 <- round(n * (1 - imbalance))
   n1 <- n - n0
-  
+
   # Generate X values from a normal distribution
   X <- rnorm(n, mean = 0, sd = 1)
-  
+
   # Generate class labels based on the transition point 'mu'
   y <- ifelse(X <= mu, rnorm(n0, mean = 0, sd = sigma), rnorm(n1, mean = 1, sd = sigma))
   y <- pnorm(y)
-  
+
   # Convert class labels to binary 0s and 1s
   y <- ifelse(y <= theta, 0, 1)
-  
+
   # Return the generated data
   list(N = n, X = X, y = y)
 }
@@ -68,10 +68,10 @@ generate_data <- function(n, mu, theta, sigma, imbalance) {
 # Function to fit the Stan model and extract estimates
 fit_model <- function(data) {
   fit <- stan(model_code = stan_code, data = data, iter = 2000, warmup = 1000, chains = 4)
-  
+
   # Extract and return the estimated mu
   estimated_mu <- mean(fit$summary$summary[, "mean", "mu"])
-  
+
   return(estimated_mu)
 }
 
@@ -80,10 +80,12 @@ results <- data.frame(Imbalance = imbalance_levels, Estimated_mu = NA)
 
 for (i in 1:length(imbalance_levels)) {
   imbalance <- imbalance_levels[i]
-  
+
   # Generate simulated data
   set.seed(123)  # For reproducibility
   data <- generate_data(n = 1000, mu = true_mu, theta = true_theta, sigma = true_sigma, imbalance = imbalance)
-  
+
   # Fit the Stan model and extract the estimated
-  
+
+
+
