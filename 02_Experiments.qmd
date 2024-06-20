@@ -84,6 +84,28 @@ stan_d <- stan_model(file = 'model_d.stan')
 ```
 
 
+### sample size 40,10
+
+#### make data
+
+```{r}
+n0 = 10
+n1 = 40
+
+minimum=200
+maximum=1400
+mu = 600
+sd = 30
+
+d = tibble(
+  x = c(runif(n = n0, min=minimum, max=mu),
+        runif(n = n1, min=mu, max=maximum)), 
+  p = x |> transition_prob(mu=mu,sd=sd),
+  y = rbinom(n=sum(n0,n1), prob=p, size=1)
+  )
+  
+```
+
 ```{r}
 N_test <- 100
 x_test <- seq(300,900,length=N_test)
@@ -97,14 +119,17 @@ datstan <- list(N = nrow(d),
                 x_test=x_test)
 ```
 
+#### fit model
 
-```{r}
-inits = list(list(transition=rnorm(1,mean=600,sd=50)))
 
-fit_d <- sampling(stan_d, data = datstan, 
-                  init=inits, chains=1) 
-print(fit_d, pars = c("transition", "sigma"))
-```
+<!-- ```{r} -->
+<!-- inits = list(list(transition=rnorm(1,mean=600,sd=50))) -->
+
+<!-- fit_d <- sampling(stan_d, data = datstan,  -->
+<!--                   init=inits, chains=1)  -->
+<!-- print(fit_d, pars = c("transition", "sigma")) -->
+<!-- ``` -->
+
 
 ```{r}
 inits = list(list(transition=580),
@@ -117,6 +142,8 @@ fit_d <- sampling(stan_d, data = datstan,
 
 print(fit_d, pars = c("transition", "sigma"))
 ```
+
+#### Plot
 
 ```{r}
 p_d <- spread_draws(fit_d, 
@@ -131,7 +158,7 @@ p_d <- spread_draws(fit_d,
 ```
 
 
-## brms logistic regression model
+#### brms logistic regression model
 
 ```{r}
 library(brms)
@@ -150,10 +177,115 @@ pb_d <- d |>
 
 ```
 
+#### Compare stan probit vs brms logit models
+
 ```{r}
 p_d
 pb_d
 ```
+
+
+### sample size 80,20
+
+#### make data
+
+```{r}
+n0 = 20
+n1 = 80
+
+minimum=200
+maximum=1400
+mu = 600
+sd = 30
+
+d = tibble(
+  x = c(runif(n = n0, min=minimum, max=mu),
+        runif(n = n1, min=mu, max=maximum)), 
+  p = x |> transition_prob(mu=mu,sd=sd),
+  y = rbinom(n=sum(n0,n1), prob=p, size=1)
+  )
+  
+```
+
+```{r}
+N_test <- 100
+x_test <- seq(300,900,length=N_test)
+datstan <- list(N = nrow(d),
+                x = d$x,
+                y = d$y,
+                prior_tr_mu=600,
+                prior_tr_sd=100,
+                prior_sigma_scale=50,
+                N_test=N_test,
+                x_test=x_test)
+```
+
+#### fit model
+
+
+<!-- ```{r} -->
+<!-- inits = list(list(transition=rnorm(1,mean=600,sd=50))) -->
+
+<!-- fit_d <- sampling(stan_d, data = datstan,  -->
+<!--                   init=inits, chains=1)  -->
+<!-- print(fit_d, pars = c("transition", "sigma")) -->
+<!-- ``` -->
+
+
+```{r}
+inits = list(list(transition=580),
+             list(transition=590),
+             list(transition=610),
+             list(transition=620))
+
+fit_d <- sampling(stan_d, data = datstan, 
+                  init=inits, chains=4)
+
+print(fit_d, pars = c("transition", "sigma"))
+```
+
+#### Plot
+
+```{r}
+p_d <- spread_draws(fit_d, 
+             p[i], 
+             ndraws=500) |> 
+  mutate(x = x_test[i]) |> 
+  ggplot() +
+  geom_line(aes(x=x,y=p,group=.draw), alpha=.05) +
+  geom_point(aes(x=x,y=y), data=d, col=2)+
+  geom_vline(xintercept=600, col="white")
+  
+```
+
+
+#### brms logistic regression model
+
+```{r}
+library(brms)
+b_d <- brm(y~x, family=bernoulli, data = d)
+```
+
+```{r}
+pb_d <- d |> 
+  data_grid(x=seq_range(x,n=101)) |> 
+  add_epred_draws(b_d, ndraws=500) |> 
+  ggplot() +
+  aes(x = x, y = y) +
+  geom_line(aes(y = .epred, group=.draw), alpha = .05) +
+  geom_point(data = d) +
+  geom_vline(xintercept=600, col="white")
+
+```
+
+#### Compare stan probit vs brms logit models
+
+```{r}
+p_d
+pb_d
+```
+
+
 # Other crap
 
 <!-- ## stan_b -->

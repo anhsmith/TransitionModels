@@ -1,0 +1,19 @@
+---
+title: "The problem"
+format: html
+---
+
+
+- The quantity of interest is the probability $\pi$ of $M$ given $x$, that is, $\pi = \text{Pr}(M|x)$
+- Sampling of $x$ is selective, but we want to account for this such that it has no influence on our estimate of $\pi$
+- At low values of $x$, the probability of M=1 approaches 1. 
+- At intermediate values of $x$, the probability of $M$=2 approaches 1. 
+- At large values of $x$, the probability of $M$=3 approaches 1.
+- The transition boundaries between $M$ = 1, 2, and 3 are probit sigmoidal curves
+
+
+
+- There is a continuous variable x. Class m transitions from 1 to 2, and then from 2 to 3, at two particular points along x, t1 and t2, respectively.
+- We have sample data of individuals from this system, where x and m is recorded. 
+- The data we have is not a random sample along x. There is some strong selectivity, apparent in the empirical distribution of the values of x in the data. 
+- I would like to build a model in Stan that estimates the probability of class m in {1,2,3} for a given x, which takes into account biased sampling apparent in the sample of x.

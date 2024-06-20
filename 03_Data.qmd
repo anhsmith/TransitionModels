@@ -1,0 +1,76 @@
+---
+title: "03_Data"
+format: html
+---
+
+
+```{r}
+library(tidyverse)
+```
+
+
+```{r}
+d <- read_csv("Data/LHDC.csv")
+```
+
+```{r}
+d |> 
+  filter(LS_Score != 2.3) |> 
+  group_by(Population, LS_Score) |> 
+  summarise(n = n())
+``````
+
+```{r}
+d |> 
+  filter(LS_Score != 2.3) |> 
+  filter(Population == "New Zealand" & LS_Score > 1) |> 
+  ggplot() + 
+  aes(x=TL, colour=factor(LS_Score), group=LS_Score) +
+  geom_density()
+```
+
+
+```{r}
+d |> 
+  filter(LS_Score != 2.3) |> 
+  filter(Population == "South Africa" & LS_Score > 1) |> 
+  ggplot() + 
+  aes(x=TL, fill=factor(LS_Score), group=LS_Score) +
+  geom_density(alpha = .3)
+```
+
+
+
+```{r}
+d |> 
+  filter(LS_Score != 2.3) |> 
+  # filter(Population == "South Africa" & LS_Score > 1) |> 
+  ggplot() + 
+  aes(x=TL, y=after_stat(density)) +
+  geom_histogram()+
+  facet_grid(rows=vars(LS_Score), cols = vars(Population))
+```
+
+```{r}
+d |> 
+  filter(LS_Score != 2.3) |> 
+  filter(Population == "South Africa" & LS_Score > 1) |> 
+  ggplot() + 
+  aes(x=TL) +
+  geom_histogram()
+```
+
+
+```{r}
+d |> 
+  filter(Population == "New Zealand" & LS_Score > 1) |> 
+  ggplot() + 
+  aes(x=TL, fill=factor(LS_Score), group=LS_Score) +
+  geom_histogram() +
+  facet_grid(rows=vars(LS_Score))
+```
+
+
+
+
+
