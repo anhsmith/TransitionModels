@@ -86,6 +86,6 @@ for (i in 1:length(imbalance_levels)) {
   data <- generate_data(n = 1000, mu = true_mu, theta = true_theta, sigma = true_sigma, imbalance = imbalance)
 
   # Fit the Stan model and extract the estimated
-
+}
 
 

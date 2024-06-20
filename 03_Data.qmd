@@ -18,7 +18,7 @@ d |>
   filter(LS_Score != 2.3) |> 
   group_by(Population, LS_Score) |> 
   summarise(n = n())
-``````
+```
 
 ```{r}
 d |> 
