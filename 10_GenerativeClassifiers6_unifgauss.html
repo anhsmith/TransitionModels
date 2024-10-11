@@ -1,0 +1,2073 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.3.450">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="Adam Smith">
+<meta name="dcterms.date" content="2024-10-11">
+
+<title>Uniform-Gaussian Generative Classifier</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="10_GenerativeClassifiers6_unifgauss_files/libs/clipboard/clipboard.min.js"></script>
+<script src="10_GenerativeClassifiers6_unifgauss_files/libs/quarto-html/quarto.js"></script>
+<script src="10_GenerativeClassifiers6_unifgauss_files/libs/quarto-html/popper.min.js"></script>
+<script src="10_GenerativeClassifiers6_unifgauss_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="10_GenerativeClassifiers6_unifgauss_files/libs/quarto-html/anchor.min.js"></script>
+<link href="10_GenerativeClassifiers6_unifgauss_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="10_GenerativeClassifiers6_unifgauss_files/libs/quarto-html/quarto-syntax-highlighting.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="10_GenerativeClassifiers6_unifgauss_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="10_GenerativeClassifiers6_unifgauss_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="10_GenerativeClassifiers6_unifgauss_files/libs/bootstrap/bootstrap.min.css" rel="stylesheet" id="quarto-bootstrap" data-mode="light">
+
+  <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+</head>
+
+<body>
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+<div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+  <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#introduction" id="toc-introduction" class="nav-link active" data-scroll-target="#introduction">Introduction</a>
+  <ul class="collapse">
+  <li><a href="#problem" id="toc-problem" class="nav-link" data-scroll-target="#problem">Problem</a></li>
+  <li><a href="#solution" id="toc-solution" class="nav-link" data-scroll-target="#solution">Solution</a></li>
+  </ul></li>
+  <li><a href="#summary-from-chatgpt" id="toc-summary-from-chatgpt" class="nav-link" data-scroll-target="#summary-from-chatgpt">Summary from ChatGPT</a>
+  <ul class="collapse">
+  <li><a href="#model-summary" id="toc-model-summary" class="nav-link" data-scroll-target="#model-summary">Model Summary</a></li>
+  <li><a href="#likelihood" id="toc-likelihood" class="nav-link" data-scroll-target="#likelihood">Likelihood</a></li>
+  <li><a href="#priors" id="toc-priors" class="nav-link" data-scroll-target="#priors">Priors</a></li>
+  <li><a href="#transformed-parameters" id="toc-transformed-parameters" class="nav-link" data-scroll-target="#transformed-parameters">Transformed Parameters</a></li>
+  <li><a href="#full-model" id="toc-full-model" class="nav-link" data-scroll-target="#full-model">Full Model</a></li>
+  <li><a href="#advantages-of-the-model" id="toc-advantages-of-the-model" class="nav-link" data-scroll-target="#advantages-of-the-model">Advantages of the Model</a></li>
+  </ul></li>
+  <li><a href="#compile-stan-code" id="toc-compile-stan-code" class="nav-link" data-scroll-target="#compile-stan-code">Compile Stan Code</a>
+  <ul class="collapse">
+  <li><a href="#print" id="toc-print" class="nav-link" data-scroll-target="#print">Print</a></li>
+  </ul></li>
+  <li><a href="#initial-test" id="toc-initial-test" class="nav-link" data-scroll-target="#initial-test">Initial test</a>
+  <ul class="collapse">
+  <li><a href="#load-funcitons" id="toc-load-funcitons" class="nav-link" data-scroll-target="#load-funcitons">Load funcitons</a></li>
+  <li><a href="#plot" id="toc-plot" class="nav-link" data-scroll-target="#plot">Plot</a></li>
+  <li><a href="#integrate" id="toc-integrate" class="nav-link" data-scroll-target="#integrate">Integrate</a></li>
+  </ul></li>
+  <li><a href="#utility-functions" id="toc-utility-functions" class="nav-link" data-scroll-target="#utility-functions">Utility functions</a>
+  <ul class="collapse">
+  <li><a href="#get_estimates" id="toc-get_estimates" class="nav-link" data-scroll-target="#get_estimates"><code>get_estimates</code></a></li>
+  <li><a href="#plot_cutpoint_estimates" id="toc-plot_cutpoint_estimates" class="nav-link" data-scroll-target="#plot_cutpoint_estimates"><code>plot_cutpoint_estimates</code></a></li>
+  <li><a href="#plot_dist_transition" id="toc-plot_dist_transition" class="nav-link" data-scroll-target="#plot_dist_transition"><code>plot_dist_transition</code></a></li>
+  </ul></li>
+  <li><a href="#set-priors-single-pop" id="toc-set-priors-single-pop" class="nav-link" data-scroll-target="#set-priors-single-pop">Set priors single pop</a></li>
+  <li><a href="#test-model-on-simulated-data" id="toc-test-model-on-simulated-data" class="nav-link" data-scroll-target="#test-model-on-simulated-data">Test model on simulated data</a>
+  <ul class="collapse">
+  <li><a href="#simulate-data" id="toc-simulate-data" class="nav-link" data-scroll-target="#simulate-data">Simulate data</a></li>
+  <li><a href="#fit-to-simulated-data" id="toc-fit-to-simulated-data" class="nav-link" data-scroll-target="#fit-to-simulated-data">Fit to simulated data</a></li>
+  <li><a href="#plot-1" id="toc-plot-1" class="nav-link" data-scroll-target="#plot-1">Plot</a></li>
+  </ul></li>
+  <li><a href="#try-on-nz-data" id="toc-try-on-nz-data" class="nav-link" data-scroll-target="#try-on-nz-data">Try on nz data</a>
+  <ul class="collapse">
+  <li><a href="#data" id="toc-data" class="nav-link" data-scroll-target="#data">Data</a></li>
+  <li><a href="#cut-points-1050-1550" id="toc-cut-points-1050-1550" class="nav-link" data-scroll-target="#cut-points-1050-1550">Cut points 1050 &amp; 1550</a>
+  <ul class="collapse">
+  <li><a href="#fit-model" id="toc-fit-model" class="nav-link" data-scroll-target="#fit-model">Fit model</a></li>
+  <li><a href="#summarise" id="toc-summarise" class="nav-link" data-scroll-target="#summarise">Summarise</a></li>
+  </ul></li>
+  <li><a href="#cut-points-1050-1650" id="toc-cut-points-1050-1650" class="nav-link" data-scroll-target="#cut-points-1050-1650">Cut points 1050 &amp; 1650</a>
+  <ul class="collapse">
+  <li><a href="#fit-model-1" id="toc-fit-model-1" class="nav-link" data-scroll-target="#fit-model-1">Fit model</a></li>
+  <li><a href="#summarise-1" id="toc-summarise-1" class="nav-link" data-scroll-target="#summarise-1">Summarise</a></li>
+  </ul></li>
+  <li><a href="#cutpoints-900-and-1650" id="toc-cutpoints-900-and-1650" class="nav-link" data-scroll-target="#cutpoints-900-and-1650">Cutpoints 900 and 1650</a>
+  <ul class="collapse">
+  <li><a href="#fit-model-2" id="toc-fit-model-2" class="nav-link" data-scroll-target="#fit-model-2">Fit model</a></li>
+  <li><a href="#summarise-2" id="toc-summarise-2" class="nav-link" data-scroll-target="#summarise-2">Summarise</a></li>
+  </ul></li>
+  <li><a href="#cutpoints-900-and-1550" id="toc-cutpoints-900-and-1550" class="nav-link" data-scroll-target="#cutpoints-900-and-1550">Cutpoints 900 and 1550</a>
+  <ul class="collapse">
+  <li><a href="#fit-model-3" id="toc-fit-model-3" class="nav-link" data-scroll-target="#fit-model-3">Fit model</a></li>
+  <li><a href="#summarise-3" id="toc-summarise-3" class="nav-link" data-scroll-target="#summarise-3">Summarise</a></li>
+  </ul></li>
+  <li><a href="#cutpoints-400-and-1550" id="toc-cutpoints-400-and-1550" class="nav-link" data-scroll-target="#cutpoints-400-and-1550">Cutpoints 400 and 1550</a>
+  <ul class="collapse">
+  <li><a href="#fit-model-4" id="toc-fit-model-4" class="nav-link" data-scroll-target="#fit-model-4">Fit model</a></li>
+  <li><a href="#summarise-4" id="toc-summarise-4" class="nav-link" data-scroll-target="#summarise-4">Summarise</a></li>
+  </ul></li>
+  <li><a href="#cutpoints-400-and-1650" id="toc-cutpoints-400-and-1650" class="nav-link" data-scroll-target="#cutpoints-400-and-1650">Cutpoints 400 and 1650</a>
+  <ul class="collapse">
+  <li><a href="#fit-model-5" id="toc-fit-model-5" class="nav-link" data-scroll-target="#fit-model-5">Fit model</a></li>
+  <li><a href="#summarise-5" id="toc-summarise-5" class="nav-link" data-scroll-target="#summarise-5">Summarise</a></li>
+  </ul></li>
+  <li><a href="#summarise-sensitivity-to-cutpoints" id="toc-summarise-sensitivity-to-cutpoints" class="nav-link" data-scroll-target="#summarise-sensitivity-to-cutpoints">Summarise sensitivity to cutpoints</a></li>
+  </ul></li>
+  <li><a href="#j-populations" id="toc-j-populations" class="nav-link" data-scroll-target="#j-populations">J populations</a>
+  <ul class="collapse">
+  <li><a href="#compile-stan-code-1" id="toc-compile-stan-code-1" class="nav-link" data-scroll-target="#compile-stan-code-1">Compile Stan code</a></li>
+  <li><a href="#print-stan-model" id="toc-print-stan-model" class="nav-link" data-scroll-target="#print-stan-model">Print Stan model</a></li>
+  </ul></li>
+  <li><a href="#set-priors-j-pop" id="toc-set-priors-j-pop" class="nav-link" data-scroll-target="#set-priors-j-pop">Set priors J pop</a>
+  <ul class="collapse">
+  <li><a href="#fit-to-actual-data" id="toc-fit-to-actual-data" class="nav-link" data-scroll-target="#fit-to-actual-data">Fit to actual data</a>
+  <ul class="collapse">
+  <li><a href="#prepare-data" id="toc-prepare-data" class="nav-link" data-scroll-target="#prepare-data">Prepare data</a></li>
+  <li><a href="#fit-model-6" id="toc-fit-model-6" class="nav-link" data-scroll-target="#fit-model-6">Fit model</a></li>
+  <li><a href="#checking" id="toc-checking" class="nav-link" data-scroll-target="#checking">Checking</a></li>
+  </ul></li>
+  <li><a href="#plot-posterior-distributions-of-transition-points" id="toc-plot-posterior-distributions-of-transition-points" class="nav-link" data-scroll-target="#plot-posterior-distributions-of-transition-points">Plot posterior distributions of transition points</a></li>
+  </ul></li>
+  </ul>
+</nav>
+</div>
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Uniform-Gaussian Generative Classifier</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    <div>
+    <div class="quarto-title-meta-heading">Author</div>
+    <div class="quarto-title-meta-contents">
+             <p>Adam Smith </p>
+          </div>
+  </div>
+    
+    <div>
+    <div class="quarto-title-meta-heading">Published</div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">October 11, 2024</p>
+    </div>
+  </div>
+  
+    
+  </div>
+  
+
+</header>
+
+<div class="cell">
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(rstan)</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(bayesplot)</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(posterior)</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">theme_set</span>(<span class="fu">theme_bw</span>())</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># graph code</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<section id="introduction" class="level1">
+<h1>Introduction</h1>
+<section id="problem" class="level2">
+<h2 class="anchored" data-anchor-id="problem">Problem</h2>
+<p>This document describes and fits a generative classifier model for estimating the length at which an animal transitions from immature to mature, based on a dataset of individuals that are either mature (<span class="math inline">\(y\)</span>=0) or immature (<span class="math inline">\(y\)</span>=1), with lengths (<span class="math inline">\(x\)</span>).</p>
+<p>Current methods of estimating transition lengths have problems.</p>
+<p>Ad hoc methods (e.g., midpoint between smallest mature and largest immature) have no scientific basis and are not probabilistic.</p>
+<p>Discriminative classifiers, such as logistic regression, explicitly model the probability of <span class="math inline">\(y\)</span>=1 for each value of <span class="math inline">\(x\)</span>. As such, they are very sensitive to unbalanced sample sizes of immature and mature, which is very common.</p>
+<p>Generative classifiers, such as linear discriminant analysis (LDA), model the distributions of <span class="math inline">\(x | y = 0\)</span> and <span class="math inline">\(x | y = 1\)</span>. The probability that <span class="math inline">\(y = 1 | x\)</span> is given by Bayes rule, essentially comparing the relative densities of the two distributions. Generative classifiers are not so sensitive to outliers because the densities. However, if a conventional distribution such as the Gaussian (as in LDA) is used, the output can be heavily influenced by data that are far away from the transition range. For example, if the transition range is around 1000, the mean and standard deviation can be heavily influenced by including points in the 200-500 range, and this affects estimates of the transition probability. Whereas, the location of the transition range should only really be informed by points that are close to the transition range.</p>
+<p>The influence of data at the opposite side of the distributions from the transition range can be ameliorated to some degree by truncating the data. However, the results are then quite heavily influenced by the choice of truncation points. The further away from the transition range one places the truncation point, the more bias is placed in the direction of that transition point.</p>
+<p>What is required is a generative model that is (1) robust to unbalanced sample sizes and (2) not unduly influenced by data that are not nearby the transition range in terms of their values of <span class="math inline">\(x\)</span>.</p>
+</section>
+<section id="solution" class="level2">
+<h2 class="anchored" data-anchor-id="solution">Solution</h2>
+<p>Here, we overcome these challenges by fitting a mixture of a Gaussian and a uniform distribution. The left (<span class="math inline">\(y = 0\)</span>) group is modelled with a uniform on the left that begins at the lower truncation value. The distribution remains flat until it approaches the transition range, at which point the distribution declines according to a Gaussian. The right (<span class="math inline">\(y = 1\)</span>) group increases according to a Gaussian distribution and then levels off to a uniform, terminating at the upper truncation value.</p>
+</section>
+</section>
+<section id="summary-from-chatgpt" class="level1">
+<h1>Summary from ChatGPT</h1>
+<section id="model-summary" class="level2">
+<h2 class="anchored" data-anchor-id="model-summary">Model Summary</h2>
+<p>This model describes a hierarchical Bayesian framework for classifying observations <span class="math inline">\(x\)</span> into two categories <span class="math inline">\(y \in \{0, 1\}\)</span> based on the location of <span class="math inline">\(x\)</span> relative to a transition point <span class="math inline">\(m_{50}\)</span>. The distribution of <span class="math inline">\(x\)</span> is assumed to be piecewise, combining uniform and Gaussian components to capture distinct behaviors on either side of the transition point. Specifically, the model assumes that the distribution of <span class="math inline">\(x\)</span> for <span class="math inline">\(y = 0\)</span> (immature individuals) has a uniform shape up to a point <span class="math inline">\(\mu_0\)</span>, after which it follows a Gaussian decay. For <span class="math inline">\(y = 1\)</span> (mature individuals), the distribution is uniform after a point <span class="math inline">\(\mu_1\)</span>, with a Gaussian shape below this threshold.</p>
+<p>The transition point <span class="math inline">\(m_{50}\)</span> is a key parameter, representing the value of <span class="math inline">\(x\)</span> where the probability of observing <span class="math inline">\(y = 0\)</span> or <span class="math inline">\(y = 1\)</span> is equal. This model also includes parameters for the spread of the transition zone (parameter <span class="math inline">\(d\)</span>) and the variability in observations (parameter <span class="math inline">\(\sigma\)</span>).</p>
+<p>By allowing for different behaviors on either side of <span class="math inline">\(m_{50}\)</span>, this model offers a flexible framework that can capture asymmetric patterns in the data. Its strengths lie in the ability to model transition regions between distinct populations with both uniform and Gaussian behaviors, which may be useful when the boundary between groups is not sharp but exhibits a gradual overlap.</p>
+</section>
+<section id="likelihood" class="level2">
+<h2 class="anchored" data-anchor-id="likelihood">Likelihood</h2>
+<p>The likelihood for the model is based on two different unnormalized log-density functions for the two categories <span class="math inline">\(y\)</span>.</p>
+<p>For <span class="math inline">\(y = 0\)</span> (immature), the log-density function is piecewise uniform and Gaussian for <span class="math inline">\(x\)</span> values below and above <span class="math inline">\(\mu_0\)</span> respectively:</p>
+<p><span class="math display">\[
+f(x_i | y_i = 0, \mu_0, \sigma, L) =
+\begin{cases}
+    0 &amp; \text{if } x_i \leq \mu_0 \\
+    -\frac{(x_i - \mu_0)^2}{2\sigma^2} &amp; \text{if } x_i &gt; \mu_0
+\end{cases}
+\]</span></p>
+<p>For <span class="math inline">\(y = 1\)</span> (mature), the log-density function is similarly piecewise for <span class="math inline">\(x\)</span> values below and above <span class="math inline">\(\mu_1\)</span>:</p>
+<p><span class="math display">\[
+f(x_i | y_i = 1, \mu_1, \sigma, U) =
+\begin{cases}
+    -\frac{(x_i - \mu_1)^2}{2\sigma^2} &amp; \text{if } x_i &lt; \mu_1 \\
+    0 &amp; \text{if } x_i \geq \mu_1
+\end{cases}
+\]</span></p>
+<p>The overall likelihood contribution for each observation is:</p>
+<p><span class="math display">\[
+\log \text{likelihood for } y_i = 0: \quad \log(f(x_i)) - \log(C_0)
+\]</span></p>
+<p><span class="math display">\[
+\log \text{likelihood for } y_i = 1: \quad \log(f(x_i)) - \log(C_1)
+\]</span></p>
+<p>where <span class="math inline">\(C_0\)</span> and <span class="math inline">\(C_1\)</span> are normalization constants ensuring the densities integrate to 1:</p>
+<p><span class="math display">\[
+C_0 = \sqrt{2\pi} \cdot \sigma / 2 + (\mu_0 - L)
+\]</span></p>
+<p><span class="math display">\[
+C_1 = \sqrt{2\pi} \cdot \sigma / 2 + (U - \mu_1)
+\]</span></p>
+</section>
+<section id="priors" class="level2">
+<h2 class="anchored" data-anchor-id="priors">Priors</h2>
+<p>The priors for the model parameters are chosen as follows:</p>
+<ul>
+<li><p>The transition point <span class="math inline">\(m_{50}\)</span> is modeled as: <span class="math display">\[
+m_{50} \sim \mathcal{N}(1300, 50)
+\]</span></p></li>
+<li><p>The difference between the means for the two categories, <span class="math inline">\(d\)</span>, follows: <span class="math display">\[
+d \sim \mathcal{N}(100, 100)
+\]</span></p></li>
+<li><p>The standard deviation <span class="math inline">\(\sigma\)</span> is given a prior: <span class="math display">\[
+\sigma \sim \mathcal{N}(100, 50)
+\]</span></p></li>
+</ul>
+</section>
+<section id="transformed-parameters" class="level2">
+<h2 class="anchored" data-anchor-id="transformed-parameters">Transformed Parameters</h2>
+<p>The means for each group are defined in terms of <span class="math inline">\(m_{50}\)</span> and <span class="math inline">\(d\)</span>:</p>
+<p><span class="math display">\[
+\mu_0 = m_{50} - \frac{d}{2}, \quad \mu_1 = m_{50} + \frac{d}{2}
+\]</span></p>
+</section>
+<section id="full-model" class="level2">
+<h2 class="anchored" data-anchor-id="full-model">Full Model</h2>
+<p>The full model combines the log-likelihood contributions for each observation across <span class="math inline">\(N\)</span> observations:</p>
+<p><span class="math display">\[
+\log p(x, y | m_{50}, d, \sigma) = \sum_{i=1}^{N} \left( \log(f(x_i | y_i, \mu_{y_i}, \sigma)) - \log(C_{y_i}) \right)
+\]</span></p>
+</section>
+<section id="advantages-of-the-model" class="level2">
+<h2 class="anchored" data-anchor-id="advantages-of-the-model">Advantages of the Model</h2>
+<ol type="1">
+<li><p><strong>Piecewise Density</strong>: The piecewise construction of the likelihood allows the model to handle a uniform distribution over a region and a Gaussian distribution beyond it, reflecting real-world situations where individuals in one class (e.g., immature) cluster within certain bounds but then trail off gradually.</p></li>
+<li><p><strong>Flexibility in Transition</strong>: The model can flexibly adjust the width of the transition zone between classes via the <span class="math inline">\(d\)</span> parameter, allowing for asymmetric transition regions.</p></li>
+<li><p><strong>Bayesian Inference</strong>: This approach allows for a full Bayesian treatment, including the incorporation of prior information and the ability to quantify uncertainty in the transition point and other parameters.</p></li>
+<li><p><strong>Normalization</strong>: The use of normalization constants ensures that the densities are properly scaled, which is critical for ensuring a valid probabilistic model.</p></li>
+</ol>
+<p>This model is well-suited for applications where the distinction between categories is not sharp, but rather involves gradual transitions that can be captured through a combination of uniform and Gaussian behaviors.</p>
+</section>
+</section>
+<section id="compile-stan-code" class="level1">
+<h1>Compile Stan Code</h1>
+<div class="cell" data-hash="10_GenerativeClassifiers6_unifgauss_cache/html/unnamed-chunk-3_466a9fa5bb39ce1929045afa7827453b">
+<div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>stan_uniform_gaussian_twogroups <span class="ot">&lt;-</span> <span class="fu">stan_model</span>(<span class="at">file =</span> <span class="st">'uniform_gaussian_twogroups.stan'</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<section id="print" class="level2">
+<h2 class="anchored" data-anchor-id="print">Print</h2>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>stan_uniform_gaussian_twogroups <span class="sc">|&gt;</span> <span class="fu">get_stancode</span>() <span class="sc">|&gt;</span> <span class="fu">cat</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>functions {
+  real uniform_gaussian_normalising_constant(real delta, real sigma) {
+    real sqrt_2pi = sqrt(2 * pi());
+    return (sqrt_2pi * sigma / 2) + delta;
+  }
+  real uniform_left_gaussian_log_density_unnormalised(real y, real mu, real sigma, real L) {
+    // Precompute repeated values
+    real sigma_sq = square(sigma);
+    // Declare the density variable
+    real log_density_unnormalised;
+    // Conditional structure for the piecewise density function
+    if (y &lt;= mu) {
+      log_density_unnormalised = 0;
+    } else {
+      log_density_unnormalised = -0.5 * ( square(y - mu) / sigma_sq );
+    }
+    // Return the normalised density
+    return log_density_unnormalised ;
+  }
+  real uniform_right_gaussian_log_density_unnormalised(real y, real mu, real sigma, real U) {
+    // Precompute repeated values
+    real sigma_sq = square(sigma);
+    // Declare the density variable
+    real log_density_unnormalised;
+    // Conditional structure for the piecewise density function
+    if (y &gt;= mu) {
+      log_density_unnormalised = 0;
+    } else {
+      log_density_unnormalised = -0.5 * ( square(y - mu) / sigma_sq );
+    }
+    // Return the normalised density
+    return log_density_unnormalised ;
+  }
+}
+data {
+  int&lt;lower=0&gt; N; // Number of data points
+  real L; // lower truncation
+  real U; // upper truncation
+  real&lt;lower=L, upper=U&gt; x[N]; // Observed values
+  int&lt;lower=0, upper=1&gt; y[N]; // response values
+  real&lt;lower=0&gt; prior_m50_mu;
+  real&lt;lower=0&gt; prior_m50_tau;
+  real&lt;lower=0&gt; prior_d_mu;
+  real&lt;lower=0&gt; prior_d_tau;
+  real&lt;lower=0&gt; prior_sigma_mu;
+  real&lt;lower=0&gt; prior_sigma_tau;
+}
+parameters {
+  real&lt;lower=L,upper=U&gt; m50; // Transition point
+  real&lt;lower=0&gt; d;       // Difference between upper immature mean and lower mature mean
+  real&lt;lower=0&gt; sigma;  // Standard deviation
+}
+transformed parameters{
+  // Means based on m50
+  real&lt;lower=L&gt; mu_0 = m50 - d / 2;
+  real&lt;upper=U&gt; mu_1 = m50 + d / 2;
+  // Compute the normalisation constants C
+  real C_0 = uniform_gaussian_normalising_constant(mu_0-L, sigma);
+  real C_1 = uniform_gaussian_normalising_constant(U-mu_1, sigma);
+}
+model {
+  // Priors
+  m50 ~ normal(prior_m50_mu, prior_m50_tau); // prior_m50_mu 1300; prior_m50_tau 100;
+  d ~ normal(prior_d_mu, prior_d_tau);    // prior_d_mu 0; prior_d_tau 100;
+  sigma ~ normal(prior_sigma_mu, prior_sigma_tau);  // prior_sigma_mu 0; prior_sigma_tau 100;
+  // Likelihood
+  for (i in 1:N) {
+    if (y[i] == 0) {
+      target += uniform_left_gaussian_log_density_unnormalised( x[i], mu_0, sigma, L ) - log(C_0);
+      } else {
+      target += uniform_right_gaussian_log_density_unnormalised( x[i], mu_1, sigma, U ) - log(C_1);
+      }
+    }
+}</code></pre>
+</div>
+</div>
+</section>
+</section>
+<section id="initial-test" class="level1">
+<h1>Initial test</h1>
+<section id="load-funcitons" class="level2">
+<h2 class="anchored" data-anchor-id="load-funcitons">Load funcitons</h2>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">source</span>(<span class="st">"uniform_gaussian_density.R"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+<section id="plot" class="level2">
+<h2 class="anchored" data-anchor-id="plot">Plot</h2>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">tibble</span>(<span class="at">y =</span> <span class="dv">900</span><span class="sc">:</span><span class="dv">2000</span>) <span class="sc">|&gt;</span> </span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rowwise</span>() <span class="sc">|&gt;</span> </span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">d =</span> <span class="fu">uniform_left_gaussian_density</span>(</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>      y, <span class="at">mu =</span> <span class="dv">1200</span>, <span class="at">sigma =</span> <span class="dv">200</span>, <span class="at">L =</span> <span class="dv">1000</span>)</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span> </span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>() <span class="sc">+</span> </span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">aes</span>(<span class="at">x=</span>y,<span class="at">y=</span>d) <span class="sc">+</span></span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="10_GenerativeClassifiers6_unifgauss_files/figure-html/unnamed-chunk-6-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+</section>
+<section id="integrate" class="level2">
+<h2 class="anchored" data-anchor-id="integrate">Integrate</h2>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(pracma)  <span class="co"># For numerical integration</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>
+Attaching package: 'pracma'</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>The following object is masked from 'package:purrr':
+
+    cross</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Define parameters</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>mu <span class="ot">&lt;-</span> <span class="dv">120</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>sigma <span class="ot">&lt;-</span> <span class="dv">1</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>L <span class="ot">&lt;-</span> <span class="dv">10</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Define the integration range</span></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>integrate_density <span class="ot">&lt;-</span> <span class="cf">function</span>(y) {</span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">uniform_left_gaussian_density</span>(y, mu, sigma, L)</span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a><span class="co"># Perform numerical integration over a wide range to cover all regions</span></span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a>area_under_curve <span class="ot">&lt;-</span> <span class="fu">integral</span>(integrate_density, L <span class="sc">-</span> <span class="dv">500</span>, mu <span class="sc">+</span> <span class="dv">500</span>)</span>
+<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(area_under_curve)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 1</code></pre>
+</div>
+</div>
+<p>Should return 1</p>
+</section>
+</section>
+<section id="utility-functions" class="level1">
+<h1>Utility functions</h1>
+<section id="get_estimates" class="level2">
+<h2 class="anchored" data-anchor-id="get_estimates"><code>get_estimates</code></h2>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>get_estimates <span class="ot">&lt;-</span> <span class="cf">function</span>(fit, L, U, <span class="at">thin=</span><span class="dv">20</span>) {</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>  fit <span class="sc">|&gt;</span> </span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">as_draws_df</span>() <span class="sc">|&gt;</span> </span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">thin_draws</span>(<span class="at">thin =</span> thin) <span class="sc">|&gt;</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">expand_grid</span>(<span class="at">x =</span> <span class="fu">seq</span>(<span class="at">from=</span>L, <span class="at">to=</span>U, <span class="at">length=</span><span class="dv">1000</span>)) <span class="sc">|&gt;</span> </span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">rowwise</span>() <span class="sc">|&gt;</span></span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(</span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>      <span class="at">d0 =</span> <span class="fu">uniform_left_gaussian_density</span>(x, mu_0, sigma, L),</span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>      <span class="at">d1 =</span> <span class="fu">uniform_right_gaussian_density</span>(x, mu_1, sigma, U)</span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>      ) <span class="sc">|&gt;</span> </span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">ungroup</span>() <span class="sc">|&gt;</span></span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(</span>
+<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a>      <span class="at">n0 =</span> d0 <span class="sc">*</span> C_0,</span>
+<span id="cb13-14"><a href="#cb13-14" aria-hidden="true" tabindex="-1"></a>      <span class="at">n1 =</span> d1 <span class="sc">*</span> C_1,</span>
+<span id="cb13-15"><a href="#cb13-15" aria-hidden="true" tabindex="-1"></a>      <span class="at">p =</span> n1 <span class="sc">/</span> ( n0 <span class="sc">+</span> n1 ),</span>
+<span id="cb13-16"><a href="#cb13-16" aria-hidden="true" tabindex="-1"></a>      <span class="at">p_normalised =</span> d1 <span class="sc">/</span> ( d0 <span class="sc">+</span> d1 ),</span>
+<span id="cb13-17"><a href="#cb13-17" aria-hidden="true" tabindex="-1"></a>      <span class="at">p50 =</span> p <span class="sc">&gt;</span> <span class="fl">0.5</span>,</span>
+<span id="cb13-18"><a href="#cb13-18" aria-hidden="true" tabindex="-1"></a>      <span class="at">p50_normalised =</span> p_normalised <span class="sc">&gt;</span> <span class="fl">0.5</span></span>
+<span id="cb13-19"><a href="#cb13-19" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb13-20"><a href="#cb13-20" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+<section id="plot_cutpoint_estimates" class="level2">
+<h2 class="anchored" data-anchor-id="plot_cutpoint_estimates"><code>plot_cutpoint_estimates</code></h2>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>plot_cutpoint_estimates <span class="ot">&lt;-</span> <span class="cf">function</span>(dat) {</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>  <span class="co"># post_d_nz |&gt;</span></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>  dat <span class="sc">|&gt;</span></span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">group_by</span>(.draw) <span class="sc">|&gt;</span> </span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">summarise</span>(</span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>      <span class="at">p50 =</span> <span class="fu">min</span>(x[p50], <span class="at">na.rm =</span> <span class="cn">TRUE</span>),</span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>      <span class="at">p50_normalised =</span> <span class="fu">min</span>(x[p50_normalised], <span class="at">na.rm =</span> <span class="cn">TRUE</span>) ,</span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>      <span class="at">m50 =</span> <span class="fu">first</span>(m50)</span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">|&gt;</span> </span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">pivot_longer</span>(<span class="at">cols =</span> p50<span class="sc">:</span>m50, <span class="at">names_to =</span> <span class="st">"Estimate"</span>, <span class="at">values_to =</span> <span class="st">"Transition point"</span>) <span class="sc">|&gt;</span> </span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a>    <span class="fu">ggplot</span>() <span class="sc">+</span> </span>
+<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a>    <span class="fu">aes</span>(<span class="at">x =</span> <span class="st">`</span><span class="at">Transition point</span><span class="st">`</span>, <span class="at">colour =</span> <span class="st">`</span><span class="at">Estimate</span><span class="st">`</span>) <span class="sc">+</span></span>
+<span id="cb14-14"><a href="#cb14-14" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_density</span>()</span>
+<span id="cb14-15"><a href="#cb14-15" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+<section id="plot_dist_transition" class="level2">
+<h2 class="anchored" data-anchor-id="plot_dist_transition"><code>plot_dist_transition</code></h2>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>plot_dist_transition <span class="ot">&lt;-</span> <span class="cf">function</span>(estimates, dat, L, U) {</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>  estimates <span class="sc">|&gt;</span> </span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">ggplot</span>() <span class="sc">+</span> </span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="dv">0</span>) <span class="sc">+</span></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_line</span>(</span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>      <span class="at">mapping =</span> <span class="fu">aes</span>(<span class="at">x =</span> x, <span class="at">y =</span> d0<span class="sc">*</span><span class="dv">200</span>, <span class="at">group =</span> .draw),</span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>      <span class="at">alpha =</span> .<span class="dv">02</span>,</span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>      <span class="at">colour =</span> <span class="st">"#00BFC4"</span></span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">+</span></span>
+<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_line</span>(</span>
+<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a>      <span class="at">mapping =</span> <span class="fu">aes</span>(<span class="at">x =</span> x, <span class="at">y =</span> d1<span class="sc">*</span><span class="dv">200</span>, <span class="at">group =</span> .draw),</span>
+<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a>      <span class="at">alpha =</span> .<span class="dv">02</span>,</span>
+<span id="cb15-14"><a href="#cb15-14" aria-hidden="true" tabindex="-1"></a>      <span class="at">colour =</span> <span class="st">"#F8766D"</span></span>
+<span id="cb15-15"><a href="#cb15-15" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">+</span></span>
+<span id="cb15-16"><a href="#cb15-16" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_point</span>(</span>
+<span id="cb15-17"><a href="#cb15-17" aria-hidden="true" tabindex="-1"></a>      <span class="at">data =</span> dat <span class="sc">|&gt;</span> <span class="fu">filter</span>(y <span class="sc">==</span> <span class="dv">0</span>),</span>
+<span id="cb15-18"><a href="#cb15-18" aria-hidden="true" tabindex="-1"></a>      <span class="at">mapping =</span> <span class="fu">aes</span>(<span class="at">x =</span> x, <span class="at">y =</span> <span class="sc">-</span>.<span class="dv">08</span>),</span>
+<span id="cb15-19"><a href="#cb15-19" aria-hidden="true" tabindex="-1"></a>      <span class="at">shape =</span> <span class="st">"|"</span>, </span>
+<span id="cb15-20"><a href="#cb15-20" aria-hidden="true" tabindex="-1"></a>      <span class="at">alpha =</span> .<span class="dv">5</span>,</span>
+<span id="cb15-21"><a href="#cb15-21" aria-hidden="true" tabindex="-1"></a>      <span class="at">colour =</span> <span class="st">"#00BFC4"</span></span>
+<span id="cb15-22"><a href="#cb15-22" aria-hidden="true" tabindex="-1"></a>      ) <span class="sc">+</span> </span>
+<span id="cb15-23"><a href="#cb15-23" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_point</span>(</span>
+<span id="cb15-24"><a href="#cb15-24" aria-hidden="true" tabindex="-1"></a>      <span class="at">data =</span> dat <span class="sc">|&gt;</span> <span class="fu">filter</span>(y <span class="sc">==</span> <span class="dv">1</span>),</span>
+<span id="cb15-25"><a href="#cb15-25" aria-hidden="true" tabindex="-1"></a>      <span class="at">mapping =</span> <span class="fu">aes</span>(<span class="at">x =</span> x, <span class="at">y =</span> <span class="sc">-</span>.<span class="dv">04</span>),</span>
+<span id="cb15-26"><a href="#cb15-26" aria-hidden="true" tabindex="-1"></a>      <span class="at">shape =</span> <span class="st">"|"</span>, </span>
+<span id="cb15-27"><a href="#cb15-27" aria-hidden="true" tabindex="-1"></a>      <span class="at">alpha =</span> .<span class="dv">5</span>,</span>
+<span id="cb15-28"><a href="#cb15-28" aria-hidden="true" tabindex="-1"></a>      <span class="at">colour =</span> <span class="st">"#F8766D"</span></span>
+<span id="cb15-29"><a href="#cb15-29" aria-hidden="true" tabindex="-1"></a>      ) <span class="sc">+</span> </span>
+<span id="cb15-30"><a href="#cb15-30" aria-hidden="true" tabindex="-1"></a>    <span class="fu">geom_line</span>(</span>
+<span id="cb15-31"><a href="#cb15-31" aria-hidden="true" tabindex="-1"></a>      <span class="at">mapping =</span> <span class="fu">aes</span>(<span class="at">x =</span> x, <span class="at">y =</span> p, <span class="at">group =</span> .draw),</span>
+<span id="cb15-32"><a href="#cb15-32" aria-hidden="true" tabindex="-1"></a>      <span class="at">alpha =</span> .<span class="dv">2</span></span>
+<span id="cb15-33"><a href="#cb15-33" aria-hidden="true" tabindex="-1"></a>      ) <span class="sc">+</span></span>
+<span id="cb15-34"><a href="#cb15-34" aria-hidden="true" tabindex="-1"></a>    <span class="co"># xlim(1050,1550) + </span></span>
+<span id="cb15-35"><a href="#cb15-35" aria-hidden="true" tabindex="-1"></a>    <span class="fu">ylab</span>(<span class="st">"Posterior probability of maturity"</span>) <span class="sc">+</span> </span>
+<span id="cb15-36"><a href="#cb15-36" aria-hidden="true" tabindex="-1"></a>    <span class="fu">ggtitle</span>(<span class="fu">paste</span>(<span class="st">"L ="</span>, L, <span class="st">"U ="</span>, U))</span>
+<span id="cb15-37"><a href="#cb15-37" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+</section>
+<section id="set-priors-single-pop" class="level1">
+<h1>Set priors single pop</h1>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>prior_m50_mu <span class="ot">=</span> <span class="dv">1300</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>prior_m50_tau <span class="ot">=</span> <span class="dv">50</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>prior_d_mu <span class="ot">=</span> <span class="dv">0</span></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>prior_d_tau <span class="ot">=</span> <span class="dv">100</span></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>prior_sigma_mu <span class="ot">=</span> <span class="dv">0</span></span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>prior_sigma_tau <span class="ot">=</span> <span class="dv">100</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+<section id="test-model-on-simulated-data" class="level1">
+<h1>Test model on simulated data</h1>
+<section id="simulate-data" class="level2">
+<h2 class="anchored" data-anchor-id="simulate-data">Simulate data</h2>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Simulate data</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>n0 <span class="ot">&lt;-</span> <span class="dv">50</span>  <span class="co"># Number of samples for class 0</span></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>n1 <span class="ot">&lt;-</span> <span class="dv">5</span> <span class="sc">*</span> n0  <span class="co"># Number of samples for class 1</span></span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>L <span class="ot">=</span> <span class="dv">900</span></span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>U <span class="ot">=</span> <span class="dv">1600</span></span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Parameters for simulation</span></span>
+<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>m50_true <span class="ot">&lt;-</span> <span class="dv">1300</span></span>
+<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a>sigma_x_true <span class="ot">&lt;-</span> <span class="dv">100</span></span>
+<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a>d_true <span class="ot">&lt;-</span> <span class="dv">300</span>  <span class="co"># Distance factor between class 0 and 1 means</span></span>
+<span id="cb17-11"><a href="#cb17-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-12"><a href="#cb17-12" aria-hidden="true" tabindex="-1"></a><span class="co"># Simulated x values</span></span>
+<span id="cb17-13"><a href="#cb17-13" aria-hidden="true" tabindex="-1"></a>mu0_true <span class="ot">&lt;-</span> m50_true <span class="sc">-</span> d_true <span class="sc">/</span> <span class="dv">2</span></span>
+<span id="cb17-14"><a href="#cb17-14" aria-hidden="true" tabindex="-1"></a>mu1_true <span class="ot">&lt;-</span> m50_true <span class="sc">+</span> d_true <span class="sc">/</span> <span class="dv">2</span></span>
+<span id="cb17-15"><a href="#cb17-15" aria-hidden="true" tabindex="-1"></a>x0 <span class="ot">&lt;-</span> <span class="fu">c</span>(</span>
+<span id="cb17-16"><a href="#cb17-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rnorm</span>(n0<span class="sc">/</span><span class="dv">2</span>, <span class="at">mean =</span> mu0_true, <span class="at">sd =</span> sigma_x_true),</span>
+<span id="cb17-17"><a href="#cb17-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rnorm</span>(n0<span class="sc">/</span><span class="dv">2</span>, <span class="at">mean =</span> mu0_true <span class="sc">-</span> <span class="dv">250</span>, <span class="at">sd =</span> sigma_x_true<span class="sc">*</span>.<span class="dv">5</span>)</span>
+<span id="cb17-18"><a href="#cb17-18" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb17-19"><a href="#cb17-19" aria-hidden="true" tabindex="-1"></a>x1 <span class="ot">&lt;-</span> <span class="fu">c</span>(</span>
+<span id="cb17-20"><a href="#cb17-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rnorm</span>(n1<span class="sc">/</span><span class="dv">2</span>, <span class="at">mean =</span> mu1_true, <span class="at">sd =</span> sigma_x_true),</span>
+<span id="cb17-21"><a href="#cb17-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rnorm</span>(n1<span class="sc">/</span><span class="dv">2</span>, <span class="at">mean =</span> mu1_true <span class="sc">+</span> <span class="dv">250</span>, <span class="at">sd =</span> sigma_x_true<span class="sc">*</span><span class="fl">1.5</span>)</span>
+<span id="cb17-22"><a href="#cb17-22" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb17-23"><a href="#cb17-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-24"><a href="#cb17-24" aria-hidden="true" tabindex="-1"></a>data_fr <span class="ot">&lt;-</span> <span class="fu">tibble</span>(</span>
+<span id="cb17-25"><a href="#cb17-25" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> <span class="fu">c</span>(x0, x1),  </span>
+<span id="cb17-26"><a href="#cb17-26" aria-hidden="true" tabindex="-1"></a>    <span class="at">y =</span> <span class="fu">c</span>(<span class="fu">rep</span>(<span class="dv">0</span>, n0), <span class="fu">rep</span>(<span class="dv">1</span>, n1))</span>
+<span id="cb17-27"><a href="#cb17-27" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span> </span>
+<span id="cb17-28"><a href="#cb17-28" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(x <span class="sc">&gt;</span> L <span class="sc">&amp;</span> x <span class="sc">&lt;</span> U)</span>
+<span id="cb17-29"><a href="#cb17-29" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-30"><a href="#cb17-30" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-31"><a href="#cb17-31" aria-hidden="true" tabindex="-1"></a><span class="co"># Data for Stan</span></span>
+<span id="cb17-32"><a href="#cb17-32" aria-hidden="true" tabindex="-1"></a>data_list <span class="ot">&lt;-</span> <span class="fu">list</span>(</span>
+<span id="cb17-33"><a href="#cb17-33" aria-hidden="true" tabindex="-1"></a>  <span class="at">N =</span> <span class="fu">nrow</span>(data_fr),</span>
+<span id="cb17-34"><a href="#cb17-34" aria-hidden="true" tabindex="-1"></a>  <span class="at">x =</span> data_fr<span class="sc">$</span>x,</span>
+<span id="cb17-35"><a href="#cb17-35" aria-hidden="true" tabindex="-1"></a>  <span class="at">y =</span> data_fr<span class="sc">$</span>y,</span>
+<span id="cb17-36"><a href="#cb17-36" aria-hidden="true" tabindex="-1"></a>  <span class="at">L =</span> L,</span>
+<span id="cb17-37"><a href="#cb17-37" aria-hidden="true" tabindex="-1"></a>  <span class="at">U =</span> U,</span>
+<span id="cb17-38"><a href="#cb17-38" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_m50_mu =</span> prior_m50_mu,</span>
+<span id="cb17-39"><a href="#cb17-39" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_m50_tau =</span> prior_m50_tau,</span>
+<span id="cb17-40"><a href="#cb17-40" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_d_mu =</span> prior_d_mu, </span>
+<span id="cb17-41"><a href="#cb17-41" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_d_tau =</span> prior_d_tau,</span>
+<span id="cb17-42"><a href="#cb17-42" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_sigma_mu =</span> prior_sigma_mu,</span>
+<span id="cb17-43"><a href="#cb17-43" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_sigma_tau =</span> prior_sigma_tau</span>
+<span id="cb17-44"><a href="#cb17-44" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="fu">data.frame</span>(<span class="at">x=</span>data_list<span class="sc">$</span>x,<span class="at">y=</span>data_list<span class="sc">$</span>y) <span class="sc">|&gt;</span> </span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>() <span class="sc">+</span></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">aes</span>(<span class="at">x =</span> x, <span class="at">fill =</span> <span class="fu">factor</span>(y), <span class="at">group =</span> y) <span class="sc">+</span></span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="at">alpha =</span> .<span class="dv">5</span>, <span class="at">col =</span> <span class="cn">NA</span>, <span class="at">position =</span> <span class="st">"identity"</span>) </span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>`stat_bin()` using `bins = 30`. Pick better value with `binwidth`.</code></pre>
+</div>
+<div class="cell-output-display">
+<p><img src="10_GenerativeClassifiers6_unifgauss_files/figure-html/unnamed-chunk-13-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+</section>
+<section id="fit-to-simulated-data" class="level2">
+<h2 class="anchored" data-anchor-id="fit-to-simulated-data">Fit to simulated data</h2>
+<div class="cell" data-hash="10_GenerativeClassifiers6_unifgauss_cache/html/unnamed-chunk-14_c64a0ec905fa96b158f6b772371101da">
+<div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Fit the model using rstan</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>fit <span class="ot">&lt;-</span> <span class="fu">sampling</span>(</span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>  stan_uniform_gaussian_twogroups, </span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> data_list,</span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">chains =</span> <span class="dv">4</span>,</span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">cores =</span> <span class="dv">4</span>,</span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">control =</span> <span class="fu">list</span>(<span class="at">adapt_delta =</span> <span class="fl">0.95</span>)</span>
+<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb20-9"><a href="#cb20-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-10"><a href="#cb20-10" aria-hidden="true" tabindex="-1"></a>fit</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Inference for Stan model: anon_model.
+4 chains, each with iter=2000; warmup=1000; thin=1; 
+post-warmup draws per chain=1000, total post-warmup draws=4000.
+
+          mean se_mean    sd     2.5%      25%      50%      75%    97.5% n_eff
+m50    1308.80    0.46 18.14  1275.00  1296.39  1307.78  1320.72  1346.57  1533
+d       195.42    2.22 63.08    63.64   156.42   197.27   237.29   316.82   808
+sigma    87.33    0.50 14.97    57.03    78.01    87.51    96.99   116.25   901
+mu_0   1211.10    1.32 41.20  1131.70  1183.07  1210.33  1237.62  1296.50   973
+mu_1   1406.51    1.05 30.82  1342.32  1387.95  1407.90  1427.20  1463.29   857
+C_0     420.55    0.91 33.85   358.13   397.21   418.61   442.13   492.05  1389
+C_1     302.94    0.47 17.13   271.15   291.00   302.54   314.32   336.68  1331
+lp__  -1082.31    0.08  1.63 -1086.07 -1082.89 -1081.90 -1081.24 -1080.70   414
+      Rhat
+m50   1.00
+d     1.01
+sigma 1.00
+mu_0  1.00
+mu_1  1.00
+C_0   1.00
+C_1   1.00
+lp__  1.01
+
+Samples were drawn using NUTS(diag_e) at Fri Oct 11 23:28:50 2024.
+For each parameter, n_eff is a crude measure of effective sample size,
+and Rhat is the potential scale reduction factor on split chains (at 
+convergence, Rhat=1).</code></pre>
+</div>
+</div>
+</section>
+<section id="plot-1" class="level2">
+<h2 class="anchored" data-anchor-id="plot-1">Plot</h2>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="fu">data.frame</span>(<span class="at">x=</span>data_list<span class="sc">$</span>x,<span class="at">y=</span>data_list<span class="sc">$</span>y) <span class="sc">|&gt;</span> </span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>() <span class="sc">+</span></span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(</span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">aes</span>(<span class="at">x =</span> x, <span class="at">y =</span> <span class="fu">after_stat</span>(density), <span class="at">fill =</span> <span class="fu">factor</span>(y), <span class="at">group =</span> y),</span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">alpha =</span> .<span class="dv">5</span>, <span class="at">col =</span> <span class="cn">NA</span>, <span class="at">position =</span> <span class="st">"identity"</span></span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">+</span> </span>
+<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(</span>
+<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">data =</span> fit <span class="sc">|&gt;</span> </span>
+<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a>      <span class="fu">as_draws_df</span>() <span class="sc">|&gt;</span> </span>
+<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a>      <span class="fu">thin_draws</span>(<span class="at">thin =</span> <span class="dv">40</span>) <span class="sc">|&gt;</span> </span>
+<span id="cb22-11"><a href="#cb22-11" aria-hidden="true" tabindex="-1"></a>      <span class="fu">expand_grid</span>(<span class="at">x =</span> <span class="fu">seq</span>(<span class="at">from=</span><span class="dv">850</span>, <span class="at">to=</span><span class="dv">1650</span>, <span class="at">length=</span><span class="dv">500</span>)) <span class="sc">|&gt;</span> </span>
+<span id="cb22-12"><a href="#cb22-12" aria-hidden="true" tabindex="-1"></a>      <span class="fu">rowwise</span>() <span class="sc">|&gt;</span> </span>
+<span id="cb22-13"><a href="#cb22-13" aria-hidden="true" tabindex="-1"></a>      <span class="fu">mutate</span>(</span>
+<span id="cb22-14"><a href="#cb22-14" aria-hidden="true" tabindex="-1"></a>        <span class="at">p =</span> <span class="fu">uniform_left_gaussian_density</span>(x, mu_0, sigma, L) </span>
+<span id="cb22-15"><a href="#cb22-15" aria-hidden="true" tabindex="-1"></a>      ),</span>
+<span id="cb22-16"><a href="#cb22-16" aria-hidden="true" tabindex="-1"></a>    <span class="at">mapping =</span> <span class="fu">aes</span>(<span class="at">x =</span> x, <span class="at">y =</span> p, <span class="at">group =</span> .draw),</span>
+<span id="cb22-17"><a href="#cb22-17" aria-hidden="true" tabindex="-1"></a>    <span class="at">alpha =</span> .<span class="dv">1</span>,</span>
+<span id="cb22-18"><a href="#cb22-18" aria-hidden="true" tabindex="-1"></a>    <span class="at">col=</span><span class="dv">1</span></span>
+<span id="cb22-19"><a href="#cb22-19" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span> </span>
+<span id="cb22-20"><a href="#cb22-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(</span>
+<span id="cb22-21"><a href="#cb22-21" aria-hidden="true" tabindex="-1"></a>    <span class="at">data =</span> fit <span class="sc">|&gt;</span> </span>
+<span id="cb22-22"><a href="#cb22-22" aria-hidden="true" tabindex="-1"></a>      <span class="fu">as_draws_df</span>() <span class="sc">|&gt;</span> </span>
+<span id="cb22-23"><a href="#cb22-23" aria-hidden="true" tabindex="-1"></a>      <span class="fu">thin_draws</span>(<span class="at">thin =</span> <span class="dv">40</span>) <span class="sc">|&gt;</span> </span>
+<span id="cb22-24"><a href="#cb22-24" aria-hidden="true" tabindex="-1"></a>      <span class="fu">expand_grid</span>(<span class="at">x =</span> <span class="fu">seq</span>(<span class="at">from=</span><span class="dv">850</span>, <span class="at">to=</span><span class="dv">1650</span>, <span class="at">length=</span><span class="dv">500</span>)) <span class="sc">|&gt;</span> </span>
+<span id="cb22-25"><a href="#cb22-25" aria-hidden="true" tabindex="-1"></a>      <span class="fu">rowwise</span>() <span class="sc">|&gt;</span> </span>
+<span id="cb22-26"><a href="#cb22-26" aria-hidden="true" tabindex="-1"></a>      <span class="fu">mutate</span>(</span>
+<span id="cb22-27"><a href="#cb22-27" aria-hidden="true" tabindex="-1"></a>        <span class="at">p =</span> <span class="fu">uniform_right_gaussian_density</span>(x, mu_1, sigma, U) </span>
+<span id="cb22-28"><a href="#cb22-28" aria-hidden="true" tabindex="-1"></a>      ),</span>
+<span id="cb22-29"><a href="#cb22-29" aria-hidden="true" tabindex="-1"></a>    <span class="at">mapping =</span> <span class="fu">aes</span>(<span class="at">x =</span> x, <span class="at">y =</span> p, <span class="at">group =</span> .draw),</span>
+<span id="cb22-30"><a href="#cb22-30" aria-hidden="true" tabindex="-1"></a>    <span class="at">alpha =</span> .<span class="dv">1</span>,</span>
+<span id="cb22-31"><a href="#cb22-31" aria-hidden="true" tabindex="-1"></a>    <span class="at">col=</span><span class="dv">1</span></span>
+<span id="cb22-32"><a href="#cb22-32" aria-hidden="true" tabindex="-1"></a>  )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>`stat_bin()` using `bins = 30`. Pick better value with `binwidth`.</code></pre>
+</div>
+<div class="cell-output-display">
+<p><img src="10_GenerativeClassifiers6_unifgauss_files/figure-html/unnamed-chunk-15-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb24"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a>post <span class="ot">&lt;-</span> <span class="fu">get_estimates</span>(fit, data_list<span class="sc">$</span>L, data_list<span class="sc">$</span>U, <span class="at">thin =</span> <span class="dv">10</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb25"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="fu">plot_cutpoint_estimates</span>(post)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="10_GenerativeClassifiers6_unifgauss_files/figure-html/unnamed-chunk-17-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb26"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="fu">plot_dist_transition</span>(post, data_fr, data_list<span class="sc">$</span>L, data_list<span class="sc">$</span>U)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="10_GenerativeClassifiers6_unifgauss_files/figure-html/unnamed-chunk-18-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+</section>
+</section>
+<section id="try-on-nz-data" class="level1">
+<h1>Try on nz data</h1>
+<section id="data" class="level2">
+<h2 class="anchored" data-anchor-id="data">Data</h2>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb27"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a>dat <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">"Data/LHDC.csv"</span>) <span class="sc">|&gt;</span> </span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(<span class="sc">!</span>(Population <span class="sc">==</span> <span class="st">"Southwest Atlantic"</span> <span class="sc">&amp;</span> <span class="sc">!</span><span class="fu">is.na</span>(OWt))) <span class="sc">|&gt;</span> </span>
+<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">transmute</span>(</span>
+<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a>    Population,</span>
+<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a>    Country,</span>
+<span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a>    Sex,</span>
+<span id="cb27-7"><a href="#cb27-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">Stage =</span> <span class="fu">as_factor</span>(LS_Score),</span>
+<span id="cb27-8"><a href="#cb27-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">Length =</span> TL</span>
+<span id="cb27-9"><a href="#cb27-9" aria-hidden="true" tabindex="-1"></a>  )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>New names:
+Rows: 13495 Columns: 47
+── Column specification
+──────────────────────────────────────────────────────── Delimiter: "," chr
+(8): ID, Source, Country, Species, Cap.gear, Sex, Population, Hemisphere dbl
+(39): ...1, Cap.year, LS_Score, TL, sdtl, TWgt, sdtwgt, F.Ys.Wgt, D.T.Wg...
+ℹ Use `spec()` to retrieve the full column specification for this data. ℹ
+Specify the column types or set `show_col_types = FALSE` to quiet this message.
+• `` -&gt; `...1`</code></pre>
+</div>
+</div>
+</section>
+<section id="cut-points-1050-1550" class="level2">
+<h2 class="anchored" data-anchor-id="cut-points-1050-1550">Cut points 1050 &amp; 1550</h2>
+<section id="fit-model" class="level3">
+<h3 class="anchored" data-anchor-id="fit-model">Fit model</h3>
+<div class="cell" data-hash="10_GenerativeClassifiers6_unifgauss_cache/html/unnamed-chunk-20_67a04648f3538cfa27c093d852bbe874">
+<div class="sourceCode cell-code" id="cb29"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a>L <span class="ot">=</span> <span class="dv">1050</span></span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>U <span class="ot">=</span> <span class="dv">1550</span></span>
+<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a>d_nz1 <span class="ot">&lt;-</span> dat <span class="sc">|&gt;</span> </span>
+<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(Length <span class="sc">&gt;</span> L <span class="sc">&amp;</span> Length <span class="sc">&lt;</span> U) <span class="sc">|&gt;</span> </span>
+<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(Population <span class="sc">==</span> <span class="st">"New Zealand"</span> <span class="sc">&amp;</span> Sex <span class="sc">==</span> <span class="st">"M"</span>) <span class="sc">|&gt;</span> </span>
+<span id="cb29-7"><a href="#cb29-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">transmute</span>(</span>
+<span id="cb29-8"><a href="#cb29-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> Length,</span>
+<span id="cb29-9"><a href="#cb29-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">y =</span> <span class="fu">as.numeric</span>(Stage <span class="sc">==</span> <span class="dv">3</span> )</span>
+<span id="cb29-10"><a href="#cb29-10" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb29-11"><a href="#cb29-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-12"><a href="#cb29-12" aria-hidden="true" tabindex="-1"></a>d_nz1_list <span class="ot">&lt;-</span> <span class="fu">list</span>( </span>
+<span id="cb29-13"><a href="#cb29-13" aria-hidden="true" tabindex="-1"></a>  <span class="at">N =</span> <span class="fu">nrow</span>(d_nz1),</span>
+<span id="cb29-14"><a href="#cb29-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">x =</span> d_nz1<span class="sc">$</span>x, </span>
+<span id="cb29-15"><a href="#cb29-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">y =</span> d_nz1<span class="sc">$</span>y, </span>
+<span id="cb29-16"><a href="#cb29-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">L =</span> L, </span>
+<span id="cb29-17"><a href="#cb29-17" aria-hidden="true" tabindex="-1"></a>  <span class="at">U =</span> U,</span>
+<span id="cb29-18"><a href="#cb29-18" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_m50_mu =</span> prior_m50_mu,</span>
+<span id="cb29-19"><a href="#cb29-19" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_m50_tau =</span> prior_m50_tau,</span>
+<span id="cb29-20"><a href="#cb29-20" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_d_mu =</span> prior_d_mu, </span>
+<span id="cb29-21"><a href="#cb29-21" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_d_tau =</span> prior_d_tau,</span>
+<span id="cb29-22"><a href="#cb29-22" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_sigma_mu =</span> prior_sigma_mu,</span>
+<span id="cb29-23"><a href="#cb29-23" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_sigma_tau =</span> prior_sigma_tau</span>
+<span id="cb29-24"><a href="#cb29-24" aria-hidden="true" tabindex="-1"></a>  )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb30"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a>fit_d_nz1 <span class="ot">&lt;-</span> <span class="fu">sampling</span>(</span>
+<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>  stan_uniform_gaussian_twogroups, </span>
+<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> d_nz1_list,</span>
+<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">chains =</span> <span class="dv">4</span>,</span>
+<span id="cb30-5"><a href="#cb30-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">cores =</span> <span class="dv">4</span>,</span>
+<span id="cb30-6"><a href="#cb30-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">control =</span> <span class="fu">list</span>(<span class="at">adapt_delta =</span> <span class="fl">0.95</span>)</span>
+<span id="cb30-7"><a href="#cb30-7" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb31"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Extract and summarize results</span></span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(fit_d_nz1)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Inference for Stan model: anon_model.
+4 chains, each with iter=2000; warmup=1000; thin=1; 
+post-warmup draws per chain=1000, total post-warmup draws=4000.
+
+          mean se_mean    sd     2.5%      25%      50%      75%    97.5% n_eff
+m50    1290.77    0.14  6.21  1277.88  1286.76  1290.93  1294.83  1303.03  1896
+d       238.52    0.68 26.09   189.38   219.86   238.18   256.07   290.43  1474
+sigma    91.70    0.18  6.99    78.76    86.77    91.31    96.45   106.38  1488
+mu_0   1171.51    0.38 14.41  1142.67  1161.86  1171.71  1181.75  1197.98  1475
+mu_1   1410.03    0.35 14.49  1381.95  1400.28  1409.56  1419.73  1438.92  1670
+C_0     236.45    0.18  8.48   220.11   230.56   236.44   242.35   252.86  2285
+C_1     254.91    0.22  9.89   235.87   248.05   254.92   261.44   274.52  2062
+lp__  -3954.34    0.03  1.22 -3957.48 -3954.87 -3954.01 -3953.46 -3952.95  1684
+      Rhat
+m50      1
+d        1
+sigma    1
+mu_0     1
+mu_1     1
+C_0      1
+C_1      1
+lp__     1
+
+Samples were drawn using NUTS(diag_e) at Fri Oct 11 23:29:48 2024.
+For each parameter, n_eff is a crude measure of effective sample size,
+and Rhat is the potential scale reduction factor on split chains (at 
+convergence, Rhat=1).</code></pre>
+</div>
+</div>
+</section>
+<section id="summarise" class="level3">
+<h3 class="anchored" data-anchor-id="summarise">Summarise</h3>
+<section id="get-estimates" class="level4">
+<h4 class="anchored" data-anchor-id="get-estimates">Get estimates</h4>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb33"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a>post_d_nz1 <span class="ot">&lt;-</span> <span class="fu">get_estimates</span>(fit_d_nz1, d_nz1_list<span class="sc">$</span>L, d_nz1_list<span class="sc">$</span>U)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+<section id="plot-cutpoints" class="level4">
+<h4 class="anchored" data-anchor-id="plot-cutpoints">Plot cutpoints</h4>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb34"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="fu">plot_cutpoint_estimates</span>(post_d_nz1)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="10_GenerativeClassifiers6_unifgauss_files/figure-html/unnamed-chunk-24-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+</section>
+<section id="calculate-probability-of-mature" class="level4">
+<h4 class="anchored" data-anchor-id="calculate-probability-of-mature">Calculate probability of mature</h4>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb35"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a><span class="fu">plot_dist_transition</span>(post_d_nz1, d_nz1, d_nz1_list<span class="sc">$</span>L, d_nz1_list<span class="sc">$</span>U)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="10_GenerativeClassifiers6_unifgauss_files/figure-html/unnamed-chunk-25-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+</section>
+</section>
+</section>
+<section id="cut-points-1050-1650" class="level2">
+<h2 class="anchored" data-anchor-id="cut-points-1050-1650">Cut points 1050 &amp; 1650</h2>
+<section id="fit-model-1" class="level3">
+<h3 class="anchored" data-anchor-id="fit-model-1">Fit model</h3>
+<div class="cell" data-hash="10_GenerativeClassifiers6_unifgauss_cache/html/unnamed-chunk-26_2613062cec3f0857efc6f119594d6e99">
+<div class="sourceCode cell-code" id="cb36"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a>L <span class="ot">=</span> <span class="dv">1050</span></span>
+<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a>U <span class="ot">=</span> <span class="dv">1650</span></span>
+<span id="cb36-3"><a href="#cb36-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-4"><a href="#cb36-4" aria-hidden="true" tabindex="-1"></a>d_nz2 <span class="ot">&lt;-</span> dat <span class="sc">|&gt;</span> </span>
+<span id="cb36-5"><a href="#cb36-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(Length <span class="sc">&gt;</span> L <span class="sc">&amp;</span> Length <span class="sc">&lt;</span> U) <span class="sc">|&gt;</span> </span>
+<span id="cb36-6"><a href="#cb36-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(Population <span class="sc">==</span> <span class="st">"New Zealand"</span> <span class="sc">&amp;</span> Sex <span class="sc">==</span> <span class="st">"M"</span>) <span class="sc">|&gt;</span> </span>
+<span id="cb36-7"><a href="#cb36-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">transmute</span>(</span>
+<span id="cb36-8"><a href="#cb36-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> Length,</span>
+<span id="cb36-9"><a href="#cb36-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">y =</span> <span class="fu">as.numeric</span>(Stage <span class="sc">==</span> <span class="dv">3</span> )</span>
+<span id="cb36-10"><a href="#cb36-10" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb36-11"><a href="#cb36-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-12"><a href="#cb36-12" aria-hidden="true" tabindex="-1"></a>d_nz2_list <span class="ot">&lt;-</span> <span class="fu">list</span>( </span>
+<span id="cb36-13"><a href="#cb36-13" aria-hidden="true" tabindex="-1"></a>  <span class="at">N =</span> <span class="fu">nrow</span>(d_nz2),</span>
+<span id="cb36-14"><a href="#cb36-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">x =</span> d_nz2<span class="sc">$</span>x, </span>
+<span id="cb36-15"><a href="#cb36-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">y =</span> d_nz2<span class="sc">$</span>y, </span>
+<span id="cb36-16"><a href="#cb36-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">L =</span> L, </span>
+<span id="cb36-17"><a href="#cb36-17" aria-hidden="true" tabindex="-1"></a>  <span class="at">U =</span> U,</span>
+<span id="cb36-18"><a href="#cb36-18" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_m50_mu =</span> prior_m50_mu,</span>
+<span id="cb36-19"><a href="#cb36-19" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_m50_tau =</span> prior_m50_tau,</span>
+<span id="cb36-20"><a href="#cb36-20" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_d_mu =</span> prior_d_mu, </span>
+<span id="cb36-21"><a href="#cb36-21" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_d_tau =</span> prior_d_tau,</span>
+<span id="cb36-22"><a href="#cb36-22" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_sigma_mu =</span> prior_sigma_mu,</span>
+<span id="cb36-23"><a href="#cb36-23" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_sigma_tau =</span> prior_sigma_tau</span>
+<span id="cb36-24"><a href="#cb36-24" aria-hidden="true" tabindex="-1"></a>  )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb37"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a>fit_d_nz2 <span class="ot">&lt;-</span> <span class="fu">sampling</span>(</span>
+<span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a>  stan_uniform_gaussian_twogroups, </span>
+<span id="cb37-3"><a href="#cb37-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> d_nz2_list,</span>
+<span id="cb37-4"><a href="#cb37-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">chains =</span> <span class="dv">4</span>,</span>
+<span id="cb37-5"><a href="#cb37-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">cores =</span> <span class="dv">4</span>,</span>
+<span id="cb37-6"><a href="#cb37-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">control =</span> <span class="fu">list</span>(<span class="at">adapt_delta =</span> <span class="fl">0.95</span>)</span>
+<span id="cb37-7"><a href="#cb37-7" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb38"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Extract and summarize results</span></span>
+<span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(fit_d_nz2)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Inference for Stan model: anon_model.
+4 chains, each with iter=2000; warmup=1000; thin=1; 
+post-warmup draws per chain=1000, total post-warmup draws=4000.
+
+          mean se_mean    sd     2.5%      25%      50%      75%    97.5% n_eff
+m50    1282.77    0.14  6.10  1270.66  1278.57  1282.83  1286.98  1294.51  1874
+d       215.07    0.65 24.87   168.58   197.88   214.62   231.00   265.81  1454
+sigma    89.71    0.19  6.91    77.16    84.90    89.39    93.98   104.55  1293
+mu_0   1175.23    0.37 14.15  1146.30  1166.04  1175.83  1184.88  1202.22  1437
+mu_1   1390.30    0.34 13.54  1364.39  1381.16  1390.13  1398.74  1417.70  1607
+C_0     237.67    0.17  8.19   221.60   232.34   237.74   242.93   253.93  2461
+C_1     372.14    0.20  9.68   353.70   365.13   372.21   378.92   391.28  2261
+lp__  -4240.33    0.03  1.22 -4243.38 -4240.84 -4240.00 -4239.46 -4238.96  1306
+      Rhat
+m50      1
+d        1
+sigma    1
+mu_0     1
+mu_1     1
+C_0      1
+C_1      1
+lp__     1
+
+Samples were drawn using NUTS(diag_e) at Fri Oct 11 23:30:22 2024.
+For each parameter, n_eff is a crude measure of effective sample size,
+and Rhat is the potential scale reduction factor on split chains (at 
+convergence, Rhat=1).</code></pre>
+</div>
+</div>
+</section>
+<section id="summarise-1" class="level3">
+<h3 class="anchored" data-anchor-id="summarise-1">Summarise</h3>
+<section id="get-estimates-1" class="level4">
+<h4 class="anchored" data-anchor-id="get-estimates-1">Get estimates</h4>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb40"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a>post_d_nz2 <span class="ot">&lt;-</span> <span class="fu">get_estimates</span>(fit_d_nz2, d_nz2_list<span class="sc">$</span>L, d_nz2_list<span class="sc">$</span>U)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+<section id="plot-cutpoints-1" class="level4">
+<h4 class="anchored" data-anchor-id="plot-cutpoints-1">Plot cutpoints</h4>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb41"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a><span class="fu">plot_cutpoint_estimates</span>(post_d_nz2)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="10_GenerativeClassifiers6_unifgauss_files/figure-html/unnamed-chunk-30-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+</section>
+<section id="calculate-probability-of-mature-1" class="level4">
+<h4 class="anchored" data-anchor-id="calculate-probability-of-mature-1">Calculate probability of mature</h4>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb42"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a><span class="fu">plot_dist_transition</span>(post_d_nz2, d_nz2, d_nz2_list<span class="sc">$</span>L, d_nz2_list<span class="sc">$</span>U)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="10_GenerativeClassifiers6_unifgauss_files/figure-html/unnamed-chunk-31-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+</section>
+</section>
+</section>
+<section id="cutpoints-900-and-1650" class="level2">
+<h2 class="anchored" data-anchor-id="cutpoints-900-and-1650">Cutpoints 900 and 1650</h2>
+<section id="fit-model-2" class="level3">
+<h3 class="anchored" data-anchor-id="fit-model-2">Fit model</h3>
+<div class="cell" data-hash="10_GenerativeClassifiers6_unifgauss_cache/html/unnamed-chunk-32_1f2577731d29ee70ee9ea7e6d14c0db1">
+<div class="sourceCode cell-code" id="cb43"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a>L <span class="ot">=</span> <span class="dv">900</span></span>
+<span id="cb43-2"><a href="#cb43-2" aria-hidden="true" tabindex="-1"></a>U <span class="ot">=</span> <span class="dv">1650</span></span>
+<span id="cb43-3"><a href="#cb43-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb43-4"><a href="#cb43-4" aria-hidden="true" tabindex="-1"></a>d_nz3 <span class="ot">&lt;-</span> dat <span class="sc">|&gt;</span> </span>
+<span id="cb43-5"><a href="#cb43-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(Length <span class="sc">&gt;</span> L <span class="sc">&amp;</span> Length <span class="sc">&lt;</span> U) <span class="sc">|&gt;</span> </span>
+<span id="cb43-6"><a href="#cb43-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(Population <span class="sc">==</span> <span class="st">"New Zealand"</span> <span class="sc">&amp;</span> Sex <span class="sc">==</span> <span class="st">"M"</span>) <span class="sc">|&gt;</span> </span>
+<span id="cb43-7"><a href="#cb43-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">transmute</span>(</span>
+<span id="cb43-8"><a href="#cb43-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> Length,</span>
+<span id="cb43-9"><a href="#cb43-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">y =</span> <span class="fu">as.numeric</span>(Stage <span class="sc">==</span> <span class="dv">3</span> )</span>
+<span id="cb43-10"><a href="#cb43-10" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb43-11"><a href="#cb43-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb43-12"><a href="#cb43-12" aria-hidden="true" tabindex="-1"></a>d_nz3_list <span class="ot">&lt;-</span> <span class="fu">list</span>( </span>
+<span id="cb43-13"><a href="#cb43-13" aria-hidden="true" tabindex="-1"></a>  <span class="at">N =</span> <span class="fu">nrow</span>(d_nz3),</span>
+<span id="cb43-14"><a href="#cb43-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">x =</span> d_nz3<span class="sc">$</span>x, </span>
+<span id="cb43-15"><a href="#cb43-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">y =</span> d_nz3<span class="sc">$</span>y, </span>
+<span id="cb43-16"><a href="#cb43-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">L =</span> L, </span>
+<span id="cb43-17"><a href="#cb43-17" aria-hidden="true" tabindex="-1"></a>  <span class="at">U =</span> U,</span>
+<span id="cb43-18"><a href="#cb43-18" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_m50_mu =</span> prior_m50_mu,</span>
+<span id="cb43-19"><a href="#cb43-19" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_m50_tau =</span> prior_m50_tau,</span>
+<span id="cb43-20"><a href="#cb43-20" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_d_mu =</span> prior_d_mu, </span>
+<span id="cb43-21"><a href="#cb43-21" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_d_tau =</span> prior_d_tau,</span>
+<span id="cb43-22"><a href="#cb43-22" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_sigma_mu =</span> prior_sigma_mu,</span>
+<span id="cb43-23"><a href="#cb43-23" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_sigma_tau =</span> prior_sigma_tau</span>
+<span id="cb43-24"><a href="#cb43-24" aria-hidden="true" tabindex="-1"></a>  )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb44"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb44-1"><a href="#cb44-1" aria-hidden="true" tabindex="-1"></a>fit_d_nz3 <span class="ot">&lt;-</span> <span class="fu">sampling</span>(</span>
+<span id="cb44-2"><a href="#cb44-2" aria-hidden="true" tabindex="-1"></a>  stan_uniform_gaussian_twogroups, </span>
+<span id="cb44-3"><a href="#cb44-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> d_nz3_list,</span>
+<span id="cb44-4"><a href="#cb44-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">chains =</span> <span class="dv">4</span>,</span>
+<span id="cb44-5"><a href="#cb44-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">cores =</span> <span class="dv">4</span>,</span>
+<span id="cb44-6"><a href="#cb44-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">control =</span> <span class="fu">list</span>(<span class="at">adapt_delta =</span> <span class="fl">0.95</span>)</span>
+<span id="cb44-7"><a href="#cb44-7" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb45"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Extract and summarize results</span></span>
+<span id="cb45-2"><a href="#cb45-2" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(fit_d_nz3)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Inference for Stan model: anon_model.
+4 chains, each with iter=2000; warmup=1000; thin=1; 
+post-warmup draws per chain=1000, total post-warmup draws=4000.
+
+          mean se_mean    sd     2.5%      25%      50%      75%    97.5% n_eff
+m50    1275.06    0.14  6.25  1262.47  1270.86  1275.18  1279.27  1287.11  1917
+d       245.11    0.67 24.96   198.66   227.91   244.58   261.04   295.27  1368
+sigma    95.38    0.19  7.14    82.30    90.51    95.02    99.99   110.03  1355
+mu_0   1152.51    0.37 14.38  1123.75  1143.34  1153.12  1162.12  1179.73  1476
+mu_1   1397.62    0.36 13.52  1371.61  1388.23  1397.56  1406.45  1424.85  1430
+C_0     372.05    0.16  7.80   356.95   366.86   372.04   377.36   387.21  2337
+C_1     371.93    0.22  9.86   353.33   365.23   371.81   378.53   392.14  1946
+lp__  -6645.65    0.03  1.23 -6648.92 -6646.15 -6645.32 -6644.76 -6644.26  1511
+      Rhat
+m50      1
+d        1
+sigma    1
+mu_0     1
+mu_1     1
+C_0      1
+C_1      1
+lp__     1
+
+Samples were drawn using NUTS(diag_e) at Fri Oct 11 23:30:55 2024.
+For each parameter, n_eff is a crude measure of effective sample size,
+and Rhat is the potential scale reduction factor on split chains (at 
+convergence, Rhat=1).</code></pre>
+</div>
+</div>
+</section>
+<section id="summarise-2" class="level3">
+<h3 class="anchored" data-anchor-id="summarise-2">Summarise</h3>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb47"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb47-1"><a href="#cb47-1" aria-hidden="true" tabindex="-1"></a>post_d_nz3 <span class="ot">&lt;-</span> <span class="fu">get_estimates</span>(fit_d_nz3, d_nz3_list<span class="sc">$</span>L, d_nz3_list<span class="sc">$</span>U)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb48"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb48-1"><a href="#cb48-1" aria-hidden="true" tabindex="-1"></a><span class="fu">plot_cutpoint_estimates</span>(post_d_nz3)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="10_GenerativeClassifiers6_unifgauss_files/figure-html/unnamed-chunk-36-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb49"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb49-1"><a href="#cb49-1" aria-hidden="true" tabindex="-1"></a><span class="fu">plot_dist_transition</span>(post_d_nz3, d_nz3, d_nz3_list<span class="sc">$</span>L, d_nz3_list<span class="sc">$</span>U)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="10_GenerativeClassifiers6_unifgauss_files/figure-html/unnamed-chunk-37-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb50"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb50-1"><a href="#cb50-1" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>() <span class="sc">+</span> </span>
+<span id="cb50-2"><a href="#cb50-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="dv">0</span>) <span class="sc">+</span></span>
+<span id="cb50-3"><a href="#cb50-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_density</span>(</span>
+<span id="cb50-4"><a href="#cb50-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">data =</span> d_nz3,</span>
+<span id="cb50-5"><a href="#cb50-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">mapping =</span> <span class="fu">aes</span>(<span class="at">x =</span> x, <span class="at">colour =</span> <span class="fu">factor</span>(y), <span class="at">group =</span> <span class="fu">factor</span>(y)),</span>
+<span id="cb50-6"><a href="#cb50-6" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb50-7"><a href="#cb50-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(</span>
+<span id="cb50-8"><a href="#cb50-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">data =</span> d_nz3 <span class="sc">|&gt;</span> <span class="fu">filter</span>(y <span class="sc">==</span> <span class="dv">0</span>),</span>
+<span id="cb50-9"><a href="#cb50-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">mapping =</span> <span class="fu">aes</span>(<span class="at">x =</span> x, <span class="at">y =</span> <span class="sc">-</span>.<span class="dv">0008</span>),</span>
+<span id="cb50-10"><a href="#cb50-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">shape =</span> <span class="st">"|"</span>, </span>
+<span id="cb50-11"><a href="#cb50-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">alpha =</span> .<span class="dv">5</span>,</span>
+<span id="cb50-12"><a href="#cb50-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">colour =</span> <span class="st">"#00BFC4"</span></span>
+<span id="cb50-13"><a href="#cb50-13" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">+</span> </span>
+<span id="cb50-14"><a href="#cb50-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(</span>
+<span id="cb50-15"><a href="#cb50-15" aria-hidden="true" tabindex="-1"></a>    <span class="at">data =</span> d_nz3 <span class="sc">|&gt;</span> <span class="fu">filter</span>(y <span class="sc">==</span> <span class="dv">1</span>),</span>
+<span id="cb50-16"><a href="#cb50-16" aria-hidden="true" tabindex="-1"></a>    <span class="at">mapping =</span> <span class="fu">aes</span>(<span class="at">x =</span> x, <span class="at">y =</span> <span class="sc">-</span>.<span class="dv">0004</span>),</span>
+<span id="cb50-17"><a href="#cb50-17" aria-hidden="true" tabindex="-1"></a>    <span class="at">shape =</span> <span class="st">"|"</span>, </span>
+<span id="cb50-18"><a href="#cb50-18" aria-hidden="true" tabindex="-1"></a>    <span class="at">alpha =</span> .<span class="dv">5</span>,</span>
+<span id="cb50-19"><a href="#cb50-19" aria-hidden="true" tabindex="-1"></a>    <span class="at">colour =</span> <span class="st">"#F8766D"</span></span>
+<span id="cb50-20"><a href="#cb50-20" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">+</span> </span>
+<span id="cb50-21"><a href="#cb50-21" aria-hidden="true" tabindex="-1"></a>  <span class="co"># xlim(1050,1550) + </span></span>
+<span id="cb50-22"><a href="#cb50-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ylab</span>(<span class="st">"Posterior probability of maturity"</span>) <span class="sc">+</span> </span>
+<span id="cb50-23"><a href="#cb50-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggtitle</span>(<span class="st">"NZ data (truncated 900 to 1650)"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="10_GenerativeClassifiers6_unifgauss_files/figure-html/unnamed-chunk-38-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+</section>
+</section>
+<section id="cutpoints-900-and-1550" class="level2">
+<h2 class="anchored" data-anchor-id="cutpoints-900-and-1550">Cutpoints 900 and 1550</h2>
+<section id="fit-model-3" class="level3">
+<h3 class="anchored" data-anchor-id="fit-model-3">Fit model</h3>
+<div class="cell" data-hash="10_GenerativeClassifiers6_unifgauss_cache/html/unnamed-chunk-39_8fc4222436f1e730a1be9f5bf7bfc575">
+<div class="sourceCode cell-code" id="cb51"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb51-1"><a href="#cb51-1" aria-hidden="true" tabindex="-1"></a>L <span class="ot">=</span> <span class="dv">900</span></span>
+<span id="cb51-2"><a href="#cb51-2" aria-hidden="true" tabindex="-1"></a>U <span class="ot">=</span> <span class="dv">1550</span></span>
+<span id="cb51-3"><a href="#cb51-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb51-4"><a href="#cb51-4" aria-hidden="true" tabindex="-1"></a>d_nz3b <span class="ot">&lt;-</span> dat <span class="sc">|&gt;</span> </span>
+<span id="cb51-5"><a href="#cb51-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(Length <span class="sc">&gt;</span> L <span class="sc">&amp;</span> Length <span class="sc">&lt;</span> U) <span class="sc">|&gt;</span> </span>
+<span id="cb51-6"><a href="#cb51-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(Population <span class="sc">==</span> <span class="st">"New Zealand"</span> <span class="sc">&amp;</span> Sex <span class="sc">==</span> <span class="st">"M"</span>) <span class="sc">|&gt;</span> </span>
+<span id="cb51-7"><a href="#cb51-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">transmute</span>(</span>
+<span id="cb51-8"><a href="#cb51-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> Length,</span>
+<span id="cb51-9"><a href="#cb51-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">y =</span> <span class="fu">as.numeric</span>(Stage <span class="sc">==</span> <span class="dv">3</span> )</span>
+<span id="cb51-10"><a href="#cb51-10" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb51-11"><a href="#cb51-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb51-12"><a href="#cb51-12" aria-hidden="true" tabindex="-1"></a>d_nz3b_list <span class="ot">&lt;-</span> <span class="fu">list</span>( </span>
+<span id="cb51-13"><a href="#cb51-13" aria-hidden="true" tabindex="-1"></a>  <span class="at">N =</span> <span class="fu">nrow</span>(d_nz3b),</span>
+<span id="cb51-14"><a href="#cb51-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">x =</span> d_nz3b<span class="sc">$</span>x, </span>
+<span id="cb51-15"><a href="#cb51-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">y =</span> d_nz3b<span class="sc">$</span>y, </span>
+<span id="cb51-16"><a href="#cb51-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">L =</span> L, </span>
+<span id="cb51-17"><a href="#cb51-17" aria-hidden="true" tabindex="-1"></a>  <span class="at">U =</span> U,</span>
+<span id="cb51-18"><a href="#cb51-18" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_m50_mu =</span> prior_m50_mu,</span>
+<span id="cb51-19"><a href="#cb51-19" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_m50_tau =</span> prior_m50_tau,</span>
+<span id="cb51-20"><a href="#cb51-20" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_d_mu =</span> prior_d_mu, </span>
+<span id="cb51-21"><a href="#cb51-21" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_d_tau =</span> prior_d_tau,</span>
+<span id="cb51-22"><a href="#cb51-22" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_sigma_mu =</span> prior_sigma_mu,</span>
+<span id="cb51-23"><a href="#cb51-23" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_sigma_tau =</span> prior_sigma_tau</span>
+<span id="cb51-24"><a href="#cb51-24" aria-hidden="true" tabindex="-1"></a>  )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb52"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb52-1"><a href="#cb52-1" aria-hidden="true" tabindex="-1"></a>fit_d_nz3b <span class="ot">&lt;-</span> <span class="fu">sampling</span>(</span>
+<span id="cb52-2"><a href="#cb52-2" aria-hidden="true" tabindex="-1"></a>  stan_uniform_gaussian_twogroups, </span>
+<span id="cb52-3"><a href="#cb52-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> d_nz3b_list,</span>
+<span id="cb52-4"><a href="#cb52-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">chains =</span> <span class="dv">4</span>,</span>
+<span id="cb52-5"><a href="#cb52-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">cores =</span> <span class="dv">4</span>,</span>
+<span id="cb52-6"><a href="#cb52-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">control =</span> <span class="fu">list</span>(<span class="at">adapt_delta =</span> <span class="fl">0.95</span>)</span>
+<span id="cb52-7"><a href="#cb52-7" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb53"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb53-1"><a href="#cb53-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Extract and summarize results</span></span>
+<span id="cb53-2"><a href="#cb53-2" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(fit_d_nz3b)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Inference for Stan model: anon_model.
+4 chains, each with iter=2000; warmup=1000; thin=1; 
+post-warmup draws per chain=1000, total post-warmup draws=4000.
+
+          mean se_mean    sd     2.5%      25%      50%      75%    97.5% n_eff
+m50    1284.21    0.13  6.17  1271.99  1280.04  1284.26  1288.34  1296.38  2175
+d       271.98    0.80 28.93   217.60   252.29   271.44   290.54   330.13  1296
+sigma    97.88    0.21  7.64    83.77    92.56    97.76   102.96   113.68  1324
+mu_0   1148.22    0.41 15.00  1118.00  1138.26  1148.45  1158.40  1176.27  1355
+mu_1   1420.20    0.44 16.42  1388.66  1409.48  1419.75  1430.63  1453.60  1414
+C_0     370.89    0.17  8.00   354.67   365.77   370.81   376.20   386.54  2155
+C_1     252.47    0.24 10.75   231.23   245.37   252.49   259.63   273.75  2007
+lp__  -6359.54    0.03  1.28 -6362.78 -6360.14 -6359.19 -6358.60 -6358.08  1355
+      Rhat
+m50      1
+d        1
+sigma    1
+mu_0     1
+mu_1     1
+C_0      1
+C_1      1
+lp__     1
+
+Samples were drawn using NUTS(diag_e) at Fri Oct 11 23:31:34 2024.
+For each parameter, n_eff is a crude measure of effective sample size,
+and Rhat is the potential scale reduction factor on split chains (at 
+convergence, Rhat=1).</code></pre>
+</div>
+</div>
+</section>
+<section id="summarise-3" class="level3">
+<h3 class="anchored" data-anchor-id="summarise-3">Summarise</h3>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb55"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb55-1"><a href="#cb55-1" aria-hidden="true" tabindex="-1"></a>post_d_nz3b <span class="ot">&lt;-</span> <span class="fu">get_estimates</span>(fit_d_nz3b, d_nz3b_list<span class="sc">$</span>L, d_nz3b_list<span class="sc">$</span>U)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb56"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb56-1"><a href="#cb56-1" aria-hidden="true" tabindex="-1"></a><span class="fu">plot_cutpoint_estimates</span>(post_d_nz3b)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="10_GenerativeClassifiers6_unifgauss_files/figure-html/unnamed-chunk-43-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb57"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb57-1"><a href="#cb57-1" aria-hidden="true" tabindex="-1"></a><span class="fu">plot_dist_transition</span>(post_d_nz3b, d_nz3b, d_nz3b_list<span class="sc">$</span>L, d_nz3b_list<span class="sc">$</span>U)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="10_GenerativeClassifiers6_unifgauss_files/figure-html/unnamed-chunk-44-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb58"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb58-1"><a href="#cb58-1" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>() <span class="sc">+</span> </span>
+<span id="cb58-2"><a href="#cb58-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="dv">0</span>) <span class="sc">+</span></span>
+<span id="cb58-3"><a href="#cb58-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_density</span>(</span>
+<span id="cb58-4"><a href="#cb58-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">data =</span> d_nz3b,</span>
+<span id="cb58-5"><a href="#cb58-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">mapping =</span> <span class="fu">aes</span>(<span class="at">x =</span> x, <span class="at">colour =</span> <span class="fu">factor</span>(y), <span class="at">group =</span> <span class="fu">factor</span>(y)),</span>
+<span id="cb58-6"><a href="#cb58-6" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb58-7"><a href="#cb58-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(</span>
+<span id="cb58-8"><a href="#cb58-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">data =</span> d_nz3b <span class="sc">|&gt;</span> <span class="fu">filter</span>(y <span class="sc">==</span> <span class="dv">0</span>),</span>
+<span id="cb58-9"><a href="#cb58-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">mapping =</span> <span class="fu">aes</span>(<span class="at">x =</span> x, <span class="at">y =</span> <span class="sc">-</span>.<span class="dv">0008</span>),</span>
+<span id="cb58-10"><a href="#cb58-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">shape =</span> <span class="st">"|"</span>, </span>
+<span id="cb58-11"><a href="#cb58-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">alpha =</span> .<span class="dv">5</span>,</span>
+<span id="cb58-12"><a href="#cb58-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">colour =</span> <span class="st">"#00BFC4"</span></span>
+<span id="cb58-13"><a href="#cb58-13" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">+</span> </span>
+<span id="cb58-14"><a href="#cb58-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(</span>
+<span id="cb58-15"><a href="#cb58-15" aria-hidden="true" tabindex="-1"></a>    <span class="at">data =</span> d_nz3b <span class="sc">|&gt;</span> <span class="fu">filter</span>(y <span class="sc">==</span> <span class="dv">1</span>),</span>
+<span id="cb58-16"><a href="#cb58-16" aria-hidden="true" tabindex="-1"></a>    <span class="at">mapping =</span> <span class="fu">aes</span>(<span class="at">x =</span> x, <span class="at">y =</span> <span class="sc">-</span>.<span class="dv">0004</span>),</span>
+<span id="cb58-17"><a href="#cb58-17" aria-hidden="true" tabindex="-1"></a>    <span class="at">shape =</span> <span class="st">"|"</span>, </span>
+<span id="cb58-18"><a href="#cb58-18" aria-hidden="true" tabindex="-1"></a>    <span class="at">alpha =</span> .<span class="dv">5</span>,</span>
+<span id="cb58-19"><a href="#cb58-19" aria-hidden="true" tabindex="-1"></a>    <span class="at">colour =</span> <span class="st">"#F8766D"</span></span>
+<span id="cb58-20"><a href="#cb58-20" aria-hidden="true" tabindex="-1"></a>    ) <span class="sc">+</span> </span>
+<span id="cb58-21"><a href="#cb58-21" aria-hidden="true" tabindex="-1"></a>  <span class="co"># xlim(1050,1550) + </span></span>
+<span id="cb58-22"><a href="#cb58-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ylab</span>(<span class="st">"Posterior probability of maturity"</span>) <span class="sc">+</span> </span>
+<span id="cb58-23"><a href="#cb58-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggtitle</span>(<span class="st">"NZ data (truncated 900 to 1550)"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="10_GenerativeClassifiers6_unifgauss_files/figure-html/unnamed-chunk-45-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+</section>
+</section>
+<section id="cutpoints-400-and-1550" class="level2">
+<h2 class="anchored" data-anchor-id="cutpoints-400-and-1550">Cutpoints 400 and 1550</h2>
+<section id="fit-model-4" class="level3">
+<h3 class="anchored" data-anchor-id="fit-model-4">Fit model</h3>
+<div class="cell" data-hash="10_GenerativeClassifiers6_unifgauss_cache/html/unnamed-chunk-46_fddfa7ed0bc17e98583252fd16ff9048">
+<div class="sourceCode cell-code" id="cb59"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb59-1"><a href="#cb59-1" aria-hidden="true" tabindex="-1"></a>L <span class="ot">=</span> <span class="dv">400</span></span>
+<span id="cb59-2"><a href="#cb59-2" aria-hidden="true" tabindex="-1"></a>U <span class="ot">=</span> <span class="dv">1550</span></span>
+<span id="cb59-3"><a href="#cb59-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb59-4"><a href="#cb59-4" aria-hidden="true" tabindex="-1"></a>d_nz4b <span class="ot">&lt;-</span> dat <span class="sc">|&gt;</span> </span>
+<span id="cb59-5"><a href="#cb59-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(Length <span class="sc">&gt;</span> L <span class="sc">&amp;</span> Length <span class="sc">&lt;</span> U) <span class="sc">|&gt;</span> </span>
+<span id="cb59-6"><a href="#cb59-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(Population <span class="sc">==</span> <span class="st">"New Zealand"</span> <span class="sc">&amp;</span> Sex <span class="sc">==</span> <span class="st">"M"</span>) <span class="sc">|&gt;</span> </span>
+<span id="cb59-7"><a href="#cb59-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">transmute</span>(</span>
+<span id="cb59-8"><a href="#cb59-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> Length,</span>
+<span id="cb59-9"><a href="#cb59-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">y =</span> <span class="fu">as.numeric</span>(Stage <span class="sc">==</span> <span class="dv">3</span> )</span>
+<span id="cb59-10"><a href="#cb59-10" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb59-11"><a href="#cb59-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb59-12"><a href="#cb59-12" aria-hidden="true" tabindex="-1"></a>d_nz4b_list <span class="ot">&lt;-</span> <span class="fu">list</span>( </span>
+<span id="cb59-13"><a href="#cb59-13" aria-hidden="true" tabindex="-1"></a>  <span class="at">N =</span> <span class="fu">nrow</span>(d_nz4b),</span>
+<span id="cb59-14"><a href="#cb59-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">x =</span> d_nz4b<span class="sc">$</span>x, </span>
+<span id="cb59-15"><a href="#cb59-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">y =</span> d_nz4b<span class="sc">$</span>y, </span>
+<span id="cb59-16"><a href="#cb59-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">L =</span> L, </span>
+<span id="cb59-17"><a href="#cb59-17" aria-hidden="true" tabindex="-1"></a>  <span class="at">U =</span> U,</span>
+<span id="cb59-18"><a href="#cb59-18" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_m50_mu =</span> prior_m50_mu,</span>
+<span id="cb59-19"><a href="#cb59-19" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_m50_tau =</span> prior_m50_tau,</span>
+<span id="cb59-20"><a href="#cb59-20" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_d_mu =</span> prior_d_mu, </span>
+<span id="cb59-21"><a href="#cb59-21" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_d_tau =</span> prior_d_tau,</span>
+<span id="cb59-22"><a href="#cb59-22" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_sigma_mu =</span> prior_sigma_mu,</span>
+<span id="cb59-23"><a href="#cb59-23" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_sigma_tau =</span> prior_sigma_tau</span>
+<span id="cb59-24"><a href="#cb59-24" aria-hidden="true" tabindex="-1"></a>  )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb60"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb60-1"><a href="#cb60-1" aria-hidden="true" tabindex="-1"></a>fit_d_nz4b <span class="ot">&lt;-</span> <span class="fu">sampling</span>(</span>
+<span id="cb60-2"><a href="#cb60-2" aria-hidden="true" tabindex="-1"></a>  stan_uniform_gaussian_twogroups, </span>
+<span id="cb60-3"><a href="#cb60-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> d_nz4b_list,</span>
+<span id="cb60-4"><a href="#cb60-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">chains =</span> <span class="dv">4</span>,</span>
+<span id="cb60-5"><a href="#cb60-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">cores =</span> <span class="dv">4</span>,</span>
+<span id="cb60-6"><a href="#cb60-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">control =</span> <span class="fu">list</span>(<span class="at">adapt_delta =</span> <span class="fl">0.95</span>)</span>
+<span id="cb60-7"><a href="#cb60-7" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Warning: There were 4 divergent transitions after warmup. See
+https://mc-stan.org/misc/warnings.html#divergent-transitions-after-warmup
+to find out why this is a problem and how to eliminate them.</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Warning: Examine the pairs() plot to diagnose sampling problems</code></pre>
+</div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb63"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb63-1"><a href="#cb63-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Extract and summarize results</span></span>
+<span id="cb63-2"><a href="#cb63-2" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(fit_d_nz4b)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Inference for Stan model: anon_model.
+4 chains, each with iter=2000; warmup=1000; thin=1; 
+post-warmup draws per chain=1000, total post-warmup draws=4000.
+
+           mean se_mean    sd      2.5%       25%       50%       75%     97.5%
+m50     1265.29    0.19  7.26   1250.64   1260.44   1265.33   1270.28   1279.32
+d        407.24    1.13 37.94    336.20    381.31    406.06    432.30    484.54
+sigma    127.89    0.31 10.04    109.33    120.81    127.72    134.30    148.50
+mu_0    1061.67    0.64 20.54   1020.29   1048.01   1062.56   1075.94   1100.85
+mu_1    1468.91    0.55 20.07   1431.06   1454.65   1468.57   1481.97   1509.44
+C_0      821.96    0.27  9.62    802.53    815.43    822.34    828.41    840.81
+C_1      241.38    0.30 12.73    217.07    232.66    241.12    250.56    265.82
+lp__  -18448.88    0.04  1.24 -18452.01 -18449.42 -18448.55 -18447.99 -18447.48
+      n_eff Rhat
+m50    1520    1
+d      1123    1
+sigma  1057    1
+mu_0   1021    1
+mu_1   1339    1
+C_0    1277    1
+C_1    1840    1
+lp__   1196    1
+
+Samples were drawn using NUTS(diag_e) at Fri Oct 11 23:32:24 2024.
+For each parameter, n_eff is a crude measure of effective sample size,
+and Rhat is the potential scale reduction factor on split chains (at 
+convergence, Rhat=1).</code></pre>
+</div>
+</div>
+</section>
+<section id="summarise-4" class="level3">
+<h3 class="anchored" data-anchor-id="summarise-4">Summarise</h3>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb65"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb65-1"><a href="#cb65-1" aria-hidden="true" tabindex="-1"></a>post_d_nz4b <span class="ot">&lt;-</span> <span class="fu">get_estimates</span>(fit_d_nz4b, d_nz4b_list<span class="sc">$</span>L, d_nz4b_list<span class="sc">$</span>U)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb66"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb66-1"><a href="#cb66-1" aria-hidden="true" tabindex="-1"></a><span class="fu">plot_cutpoint_estimates</span>(post_d_nz4b)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="10_GenerativeClassifiers6_unifgauss_files/figure-html/unnamed-chunk-50-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb67"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb67-1"><a href="#cb67-1" aria-hidden="true" tabindex="-1"></a><span class="fu">plot_dist_transition</span>(post_d_nz4b, d_nz4b, d_nz4b_list<span class="sc">$</span>L, d_nz4b_list<span class="sc">$</span>U)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="10_GenerativeClassifiers6_unifgauss_files/figure-html/unnamed-chunk-51-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+</section>
+</section>
+<section id="cutpoints-400-and-1650" class="level2">
+<h2 class="anchored" data-anchor-id="cutpoints-400-and-1650">Cutpoints 400 and 1650</h2>
+<section id="fit-model-5" class="level3">
+<h3 class="anchored" data-anchor-id="fit-model-5">Fit model</h3>
+<div class="cell" data-hash="10_GenerativeClassifiers6_unifgauss_cache/html/unnamed-chunk-52_4d4255356eb45d322bd70f62f66542e6">
+<div class="sourceCode cell-code" id="cb68"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb68-1"><a href="#cb68-1" aria-hidden="true" tabindex="-1"></a>L <span class="ot">=</span> <span class="dv">400</span></span>
+<span id="cb68-2"><a href="#cb68-2" aria-hidden="true" tabindex="-1"></a>U <span class="ot">=</span> <span class="dv">1650</span></span>
+<span id="cb68-3"><a href="#cb68-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb68-4"><a href="#cb68-4" aria-hidden="true" tabindex="-1"></a>d_nz4 <span class="ot">&lt;-</span> dat <span class="sc">|&gt;</span> </span>
+<span id="cb68-5"><a href="#cb68-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(Length <span class="sc">&gt;</span> L <span class="sc">&amp;</span> Length <span class="sc">&lt;</span> U) <span class="sc">|&gt;</span> </span>
+<span id="cb68-6"><a href="#cb68-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(Population <span class="sc">==</span> <span class="st">"New Zealand"</span> <span class="sc">&amp;</span> Sex <span class="sc">==</span> <span class="st">"M"</span>) <span class="sc">|&gt;</span> </span>
+<span id="cb68-7"><a href="#cb68-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">transmute</span>(</span>
+<span id="cb68-8"><a href="#cb68-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> Length,</span>
+<span id="cb68-9"><a href="#cb68-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">y =</span> <span class="fu">as.numeric</span>(Stage <span class="sc">==</span> <span class="dv">3</span> )</span>
+<span id="cb68-10"><a href="#cb68-10" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb68-11"><a href="#cb68-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb68-12"><a href="#cb68-12" aria-hidden="true" tabindex="-1"></a>d_nz4_list <span class="ot">&lt;-</span> <span class="fu">list</span>( </span>
+<span id="cb68-13"><a href="#cb68-13" aria-hidden="true" tabindex="-1"></a>  <span class="at">N =</span> <span class="fu">nrow</span>(d_nz4),</span>
+<span id="cb68-14"><a href="#cb68-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">x =</span> d_nz4<span class="sc">$</span>x, </span>
+<span id="cb68-15"><a href="#cb68-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">y =</span> d_nz4<span class="sc">$</span>y, </span>
+<span id="cb68-16"><a href="#cb68-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">L =</span> L, </span>
+<span id="cb68-17"><a href="#cb68-17" aria-hidden="true" tabindex="-1"></a>  <span class="at">U =</span> U,</span>
+<span id="cb68-18"><a href="#cb68-18" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_m50_mu =</span> prior_m50_mu,</span>
+<span id="cb68-19"><a href="#cb68-19" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_m50_tau =</span> prior_m50_tau,</span>
+<span id="cb68-20"><a href="#cb68-20" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_d_mu =</span> prior_d_mu, </span>
+<span id="cb68-21"><a href="#cb68-21" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_d_tau =</span> prior_d_tau,</span>
+<span id="cb68-22"><a href="#cb68-22" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_sigma_mu =</span> prior_sigma_mu,</span>
+<span id="cb68-23"><a href="#cb68-23" aria-hidden="true" tabindex="-1"></a>  <span class="at">prior_sigma_tau =</span> prior_sigma_tau</span>
+<span id="cb68-24"><a href="#cb68-24" aria-hidden="true" tabindex="-1"></a>  )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb69"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb69-1"><a href="#cb69-1" aria-hidden="true" tabindex="-1"></a>fit_d_nz4 <span class="ot">&lt;-</span> <span class="fu">sampling</span>(</span>
+<span id="cb69-2"><a href="#cb69-2" aria-hidden="true" tabindex="-1"></a>  stan_uniform_gaussian_twogroups, </span>
+<span id="cb69-3"><a href="#cb69-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> d_nz4_list,</span>
+<span id="cb69-4"><a href="#cb69-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">chains =</span> <span class="dv">4</span>,</span>
+<span id="cb69-5"><a href="#cb69-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">cores =</span> <span class="dv">4</span>,</span>
+<span id="cb69-6"><a href="#cb69-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">control =</span> <span class="fu">list</span>(<span class="at">adapt_delta =</span> <span class="fl">0.95</span>)</span>
+<span id="cb69-7"><a href="#cb69-7" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb70"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb70-1"><a href="#cb70-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Extract and summarize results</span></span>
+<span id="cb70-2"><a href="#cb70-2" aria-hidden="true" tabindex="-1"></a><span class="fu">print</span>(fit_d_nz4)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Inference for Stan model: anon_model.
+4 chains, each with iter=2000; warmup=1000; thin=1; 
+post-warmup draws per chain=1000, total post-warmup draws=4000.
+
+           mean se_mean    sd      2.5%       25%       50%       75%     97.5%
+m50     1252.87    0.18  7.26   1238.08   1248.28   1252.93   1257.88   1266.57
+d        365.85    1.01 34.27    302.08    342.55    364.86    388.39    434.66
+sigma    123.73    0.31  9.66    105.78    117.27    123.09    129.87    144.02
+mu_0    1069.95    0.66 19.81   1028.53   1057.25   1071.04   1083.00   1107.21
+mu_1    1435.80    0.46 17.33   1402.94   1423.73   1435.65   1446.97   1471.41
+C_0      825.02    0.28  9.37    806.14    819.00    825.33    831.26    842.76
+C_1      369.28    0.26 11.61    346.69    361.42    369.01    376.78    392.56
+lp__  -18736.20    0.04  1.22 -18739.30 -18736.80 -18735.89 -18735.30 -18734.79
+      n_eff Rhat
+m50    1567    1
+d      1145    1
+sigma   969    1
+mu_0    898    1
+mu_1   1429    1
+C_0    1123    1
+C_1    2012    1
+lp__   1086    1
+
+Samples were drawn using NUTS(diag_e) at Fri Oct 11 23:33:20 2024.
+For each parameter, n_eff is a crude measure of effective sample size,
+and Rhat is the potential scale reduction factor on split chains (at 
+convergence, Rhat=1).</code></pre>
+</div>
+</div>
+</section>
+<section id="summarise-5" class="level3">
+<h3 class="anchored" data-anchor-id="summarise-5">Summarise</h3>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb72"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb72-1"><a href="#cb72-1" aria-hidden="true" tabindex="-1"></a>post_d_nz4 <span class="ot">&lt;-</span> <span class="fu">get_estimates</span>(fit_d_nz4, d_nz4_list<span class="sc">$</span>L, d_nz4_list<span class="sc">$</span>U)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb73"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb73-1"><a href="#cb73-1" aria-hidden="true" tabindex="-1"></a><span class="fu">plot_cutpoint_estimates</span>(post_d_nz4)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="10_GenerativeClassifiers6_unifgauss_files/figure-html/unnamed-chunk-56-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb74"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb74-1"><a href="#cb74-1" aria-hidden="true" tabindex="-1"></a><span class="fu">plot_dist_transition</span>(post_d_nz4, d_nz4, d_nz4_list<span class="sc">$</span>L, d_nz4_list<span class="sc">$</span>U)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="10_GenerativeClassifiers6_unifgauss_files/figure-html/unnamed-chunk-57-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+</section>
+</section>
+<section id="summarise-sensitivity-to-cutpoints" class="level2">
+<h2 class="anchored" data-anchor-id="summarise-sensitivity-to-cutpoints">Summarise sensitivity to cutpoints</h2>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb75"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb75-1"><a href="#cb75-1" aria-hidden="true" tabindex="-1"></a><span class="fu">bind_cols</span>(</span>
+<span id="cb75-2"><a href="#cb75-2" aria-hidden="true" tabindex="-1"></a>  <span class="st">"L = 1050, U = 1550"</span> <span class="ot">=</span> <span class="fu">extract</span>(fit_d_nz1)<span class="sc">$</span>m50, <span class="co"># d_nz1_list$L; d_nz1_list$U</span></span>
+<span id="cb75-3"><a href="#cb75-3" aria-hidden="true" tabindex="-1"></a>  <span class="st">"L = 1050, U = 1650"</span> <span class="ot">=</span> <span class="fu">extract</span>(fit_d_nz2)<span class="sc">$</span>m50, <span class="co"># d_nz2_list$L; d_nz2_list$U</span></span>
+<span id="cb75-4"><a href="#cb75-4" aria-hidden="true" tabindex="-1"></a>  <span class="st">"L = 900, U = 1650"</span> <span class="ot">=</span> <span class="fu">extract</span>(fit_d_nz3)<span class="sc">$</span>m50, <span class="co"># d_nz3_list$L; d_nz3_list$U</span></span>
+<span id="cb75-5"><a href="#cb75-5" aria-hidden="true" tabindex="-1"></a>  <span class="st">"L = 900, U = 1550"</span> <span class="ot">=</span> <span class="fu">extract</span>(fit_d_nz3b)<span class="sc">$</span>m50, <span class="co"># d_nz3b_list$L; d_nz3b_list$U</span></span>
+<span id="cb75-6"><a href="#cb75-6" aria-hidden="true" tabindex="-1"></a>  <span class="st">"L = 400, U = 1650"</span> <span class="ot">=</span> <span class="fu">extract</span>(fit_d_nz4)<span class="sc">$</span>m50,  <span class="co"># d_nz4_list$L; d_nz4_list$U</span></span>
+<span id="cb75-7"><a href="#cb75-7" aria-hidden="true" tabindex="-1"></a>  <span class="st">"L = 400, U = 1550"</span> <span class="ot">=</span> <span class="fu">extract</span>(fit_d_nz4b)<span class="sc">$</span>m50  <span class="co"># d_nz4b_list$L; d_nz4b_list$U</span></span>
+<span id="cb75-8"><a href="#cb75-8" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span> </span>
+<span id="cb75-9"><a href="#cb75-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_longer</span>(<span class="fu">everything</span>(), <span class="at">names_to =</span> <span class="st">"Truncation values"</span>, <span class="at">values_to =</span> <span class="st">"Transition point"</span>) <span class="sc">|&gt;</span> </span>
+<span id="cb75-10"><a href="#cb75-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>() <span class="sc">+</span></span>
+<span id="cb75-11"><a href="#cb75-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">aes</span>(<span class="at">x=</span><span class="st">`</span><span class="at">Transition point</span><span class="st">`</span>, <span class="at">colour=</span><span class="st">`</span><span class="at">Truncation values</span><span class="st">`</span>) <span class="sc">+</span> </span>
+<span id="cb75-12"><a href="#cb75-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_density</span>() <span class="sc">+</span></span>
+<span id="cb75-13"><a href="#cb75-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ylab</span>(<span class="st">"Posterior density"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="10_GenerativeClassifiers6_unifgauss_files/figure-html/unnamed-chunk-58-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+</section>
+</section>
+<section id="j-populations" class="level1">
+<h1>J populations</h1>
+<section id="compile-stan-code-1" class="level2">
+<h2 class="anchored" data-anchor-id="compile-stan-code-1">Compile Stan code</h2>
+<div class="cell" data-hash="10_GenerativeClassifiers6_unifgauss_cache/html/unnamed-chunk-59_6a0a66b7db7427dbbb325417f3127d06">
+<div class="sourceCode cell-code" id="cb76"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb76-1"><a href="#cb76-1" aria-hidden="true" tabindex="-1"></a>stan_uniform_gaussian_Jpopulations <span class="ot">&lt;-</span> <span class="fu">stan_model</span>(<span class="at">file =</span> <span class="st">'uniform_gaussian_Jpopulations.stan'</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</section>
+<section id="print-stan-model" class="level2">
+<h2 class="anchored" data-anchor-id="print-stan-model">Print Stan model</h2>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb77"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb77-1"><a href="#cb77-1" aria-hidden="true" tabindex="-1"></a>stan_uniform_gaussian_Jpopulations <span class="sc">|&gt;</span> <span class="fu">get_stancode</span>() <span class="sc">|&gt;</span> <span class="fu">cat</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>functions {
+  real uniform_gaussian_normalising_constant(real delta, real sigma) {
+    real sqrt_2pi = sqrt(2 * pi());
+    return (sqrt_2pi * sigma / 2) + delta;
+  }
+  real uniform_left_gaussian_log_density_unnormalised(real y, real mu, real sigma, real L) {
+    // Declare the density variable
+    real log_density_unnormalised;
+    // Conditional structure for the piecewise density function
+    if (y &lt;= mu) {
+      log_density_unnormalised = 0;
+    } else {
+      log_density_unnormalised = -0.5 * ( square(y - mu) / square(sigma) );
+    }
+    // Return the normalised density
+    return log_density_unnormalised ;
+  }
+  real uniform_right_gaussian_log_density_unnormalised(real y, real mu, real sigma, real U) {
+    // Declare the density variable
+    real log_density_unnormalised;
+    // Conditional structure for the piecewise density function
+    if (y &gt;= mu) {
+      log_density_unnormalised = 0;
+    } else {
+      log_density_unnormalised = -0.5 * ( square(y - mu) / square(sigma) );
+    }
+    // Return the normalised density
+    return log_density_unnormalised ;
+  }
+}
+data {
+  int&lt;lower=0&gt; N; // Number of data points
+  int&lt;lower=1&gt; J; // number of populations
+  real L; // lower truncation
+  real U; // upper truncation
+  real&lt;lower=L, upper=U&gt; x[N]; // Observed values: lengths
+  int&lt;lower=0, upper=1&gt; y[N]; // Response: 0 = immature, 1 = mature
+  int&lt;lower=1, upper=J&gt; pop[N]; // population index for each data point
+  real&lt;lower=0&gt; prior_mu_m50_mu;
+  real&lt;lower=0&gt; prior_mu_m50_tau;
+  real&lt;lower=0&gt; prior_d_mu;
+  real&lt;lower=0&gt; prior_d_tau;
+  real&lt;lower=0&gt; prior_sigma_x_tau;
+  real&lt;lower=0&gt; prior_sigma_alpha_tau;
+}
+parameters {
+  real&lt;lower=L,upper=U&gt; mu_m50; // Mean transition point
+  real&lt;lower=0&gt; d;       // Difference between upper immature mean and lower mature mean
+  real z[J]; // z scores of population effects on m50_global (non-centred parameterisation)
+  real&lt;lower=0&gt; sigma_x;  // Standard deviation of lengths (variation in transition)
+  real&lt;lower=0&gt; sigma_alpha;  // Standard deviation of population transition points
+}
+transformed parameters{
+  real alpha[J];
+  real m50_pop[J];
+  real mu0_pop[J];
+  real mu1_pop[J];
+  real C0_pop[J];
+  real C1_pop[J];
+  for(j in 1:J) {
+    alpha[j] = z[j] * sigma_alpha;  // non-centred parameterisation
+    m50_pop[j] = mu_m50 + alpha[j];
+    mu0_pop[j] = m50_pop[j] - d / 2;
+    mu1_pop[j] = m50_pop[j] + d / 2;
+    // Compute the normalisation constants C
+    C0_pop[j] = uniform_gaussian_normalising_constant(mu0_pop[j]-L, sigma_x);
+    C1_pop[j] = uniform_gaussian_normalising_constant(U-mu1_pop[j], sigma_x);
+  }
+}
+model {
+  // Priors
+  mu_m50 ~ normal(prior_mu_m50_mu, prior_mu_m50_tau); // 1300, 50;
+  d ~ normal(prior_d_mu, prior_d_tau);    // prior_d_mu 0; prior_d_tau 100;
+  sigma_x ~ normal(0, prior_sigma_x_tau);  // prior_sigma_mu 0; prior_sigma_tau 100;
+  z ~ normal(0, 1);
+  sigma_alpha ~ normal(0, prior_sigma_alpha_tau); // 0, 50
+  // Likelihood
+  for (i in 1:N) {
+    if (y[i] == 0) {
+      target += uniform_left_gaussian_log_density_unnormalised( x[i], mu0_pop[pop[i]], sigma_x, L ) - log(C0_pop[pop[i]]);
+      } else {
+      target += uniform_right_gaussian_log_density_unnormalised( x[i], mu1_pop[pop[i]], sigma_x, U ) - log(C1_pop[pop[i]]);
+      }
+    }
+}</code></pre>
+</div>
+</div>
+</section>
+</section>
+<section id="set-priors-j-pop" class="level1">
+<h1>Set priors J pop</h1>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb79"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb79-1"><a href="#cb79-1" aria-hidden="true" tabindex="-1"></a>prior_mu_m50_mu <span class="ot">=</span> <span class="dv">1300</span></span>
+<span id="cb79-2"><a href="#cb79-2" aria-hidden="true" tabindex="-1"></a>prior_mu_m50_tau <span class="ot">=</span> <span class="dv">50</span></span>
+<span id="cb79-3"><a href="#cb79-3" aria-hidden="true" tabindex="-1"></a>prior_d_mu <span class="ot">=</span> <span class="dv">0</span></span>
+<span id="cb79-4"><a href="#cb79-4" aria-hidden="true" tabindex="-1"></a>prior_d_tau <span class="ot">=</span> <span class="dv">100</span></span>
+<span id="cb79-5"><a href="#cb79-5" aria-hidden="true" tabindex="-1"></a>prior_sigma_x_tau <span class="ot">=</span> <span class="dv">50</span></span>
+<span id="cb79-6"><a href="#cb79-6" aria-hidden="true" tabindex="-1"></a>prior_sigma_alpha_tau <span class="ot">=</span> <span class="dv">50</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<section id="fit-to-actual-data" class="level2">
+<h2 class="anchored" data-anchor-id="fit-to-actual-data">Fit to actual data</h2>
+<section id="prepare-data" class="level3">
+<h3 class="anchored" data-anchor-id="prepare-data">Prepare data</h3>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb80"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb80-1"><a href="#cb80-1" aria-hidden="true" tabindex="-1"></a>L <span class="ot">=</span> <span class="dv">1050</span></span>
+<span id="cb80-2"><a href="#cb80-2" aria-hidden="true" tabindex="-1"></a>U <span class="ot">=</span> <span class="dv">1550</span></span>
+<span id="cb80-3"><a href="#cb80-3" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb80-4"><a href="#cb80-4" aria-hidden="true" tabindex="-1"></a>d_pop <span class="ot">&lt;-</span> dat <span class="sc">|&gt;</span></span>
+<span id="cb80-5"><a href="#cb80-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(Length <span class="sc">&gt;</span> L <span class="sc">&amp;</span> Length <span class="sc">&lt;</span> U <span class="sc">&amp;</span> Sex <span class="sc">==</span> <span class="st">"M"</span> <span class="sc">&amp;</span> Population <span class="sc">!=</span> <span class="st">"Northeast Pacific"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb80-6"><a href="#cb80-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">transmute</span>(</span>
+<span id="cb80-7"><a href="#cb80-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> Length,</span>
+<span id="cb80-8"><a href="#cb80-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">y =</span> <span class="fu">as.numeric</span>(Stage <span class="sc">==</span> <span class="dv">3</span>),</span>
+<span id="cb80-9"><a href="#cb80-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">pop =</span> Population <span class="sc">|&gt;</span> <span class="fu">as.factor</span>() <span class="sc">|&gt;</span> <span class="fu">as.numeric</span>()</span>
+<span id="cb80-10"><a href="#cb80-10" aria-hidden="true" tabindex="-1"></a>  )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb81"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb81-1"><a href="#cb81-1" aria-hidden="true" tabindex="-1"></a>d_pop_list <span class="ot">&lt;-</span> <span class="fu">list</span>(</span>
+<span id="cb81-2"><a href="#cb81-2" aria-hidden="true" tabindex="-1"></a>    <span class="at">N =</span> <span class="fu">nrow</span>(d_pop),</span>
+<span id="cb81-3"><a href="#cb81-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> d_pop<span class="sc">$</span>x,</span>
+<span id="cb81-4"><a href="#cb81-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">y =</span> d_pop<span class="sc">$</span>y,</span>
+<span id="cb81-5"><a href="#cb81-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">pop =</span> d_pop<span class="sc">$</span>pop,</span>
+<span id="cb81-6"><a href="#cb81-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">J =</span> <span class="fu">n_distinct</span>(d_pop<span class="sc">$</span>pop),</span>
+<span id="cb81-7"><a href="#cb81-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">U =</span> U,</span>
+<span id="cb81-8"><a href="#cb81-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">L =</span> L,</span>
+<span id="cb81-9"><a href="#cb81-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb81-10"><a href="#cb81-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">prior_mu_m50_mu =</span> prior_mu_m50_mu,</span>
+<span id="cb81-11"><a href="#cb81-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">prior_mu_m50_tau =</span> prior_mu_m50_tau,</span>
+<span id="cb81-12"><a href="#cb81-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">prior_d_mu =</span> prior_d_mu,</span>
+<span id="cb81-13"><a href="#cb81-13" aria-hidden="true" tabindex="-1"></a>    <span class="at">prior_d_tau =</span> prior_d_tau,</span>
+<span id="cb81-14"><a href="#cb81-14" aria-hidden="true" tabindex="-1"></a>    <span class="at">prior_sigma_x_tau =</span> prior_sigma_x_tau,</span>
+<span id="cb81-15"><a href="#cb81-15" aria-hidden="true" tabindex="-1"></a>    <span class="at">prior_sigma_alpha_tau =</span> prior_sigma_alpha_tau</span>
+<span id="cb81-16"><a href="#cb81-16" aria-hidden="true" tabindex="-1"></a>    )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb82"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb82-1"><a href="#cb82-1" aria-hidden="true" tabindex="-1"></a>popkey <span class="ot">&lt;-</span> dat <span class="sc">|&gt;</span></span>
+<span id="cb82-2"><a href="#cb82-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>( Population <span class="sc">!=</span> <span class="st">"Northeast Pacific"</span> ) <span class="sc">|&gt;</span></span>
+<span id="cb82-3"><a href="#cb82-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">transmute</span>(</span>
+<span id="cb82-4"><a href="#cb82-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">pop =</span> Population <span class="sc">|&gt;</span> <span class="fu">as.factor</span>() <span class="sc">|&gt;</span> <span class="fu">as.numeric</span>(),</span>
+<span id="cb82-5"><a href="#cb82-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">key =</span> Population</span>
+<span id="cb82-6"><a href="#cb82-6" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb82-7"><a href="#cb82-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">unique</span>() <span class="sc">|&gt;</span></span>
+<span id="cb82-8"><a href="#cb82-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(pop)</span>
+<span id="cb82-9"><a href="#cb82-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb82-10"><a href="#cb82-10" aria-hidden="true" tabindex="-1"></a>popkey</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 5 × 2
+    pop key               
+  &lt;dbl&gt; &lt;chr&gt;             
+1     1 Australia         
+2     2 New Zealand       
+3     3 Northeast Atlantic
+4     4 South Africa      
+5     5 Southwest Atlantic</code></pre>
+</div>
+</div>
+</section>
+<section id="fit-model-6" class="level3">
+<h3 class="anchored" data-anchor-id="fit-model-6">Fit model</h3>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb84"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb84-1"><a href="#cb84-1" aria-hidden="true" tabindex="-1"></a>fit_d_pop <span class="ot">&lt;-</span> <span class="fu">sampling</span>(</span>
+<span id="cb84-2"><a href="#cb84-2" aria-hidden="true" tabindex="-1"></a>  stan_uniform_gaussian_Jpopulations,</span>
+<span id="cb84-3"><a href="#cb84-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> d_pop_list,</span>
+<span id="cb84-4"><a href="#cb84-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">chains =</span> <span class="dv">4</span>,</span>
+<span id="cb84-5"><a href="#cb84-5" aria-hidden="true" tabindex="-1"></a>  <span class="co"># iter = 2000,</span></span>
+<span id="cb84-6"><a href="#cb84-6" aria-hidden="true" tabindex="-1"></a>  <span class="co"># warmup = 500,</span></span>
+<span id="cb84-7"><a href="#cb84-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">cores =</span> <span class="dv">4</span>,</span>
+<span id="cb84-8"><a href="#cb84-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">control =</span> <span class="fu">list</span>(<span class="at">adapt_delta =</span> <span class="fl">0.95</span>)</span>
+<span id="cb84-9"><a href="#cb84-9" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb85"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb85-1"><a href="#cb85-1" aria-hidden="true" tabindex="-1"></a>fit_d_pop</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Inference for Stan model: anon_model.
+4 chains, each with iter=2000; warmup=1000; thin=1; 
+post-warmup draws per chain=1000, total post-warmup draws=4000.
+
+                 mean se_mean    sd      2.5%       25%       50%       75%
+mu_m50        1274.59    0.47 16.13   1242.33   1264.74   1274.00   1283.74
+d              135.92    0.34 14.77    106.27    126.22    135.85    145.87
+z[1]             1.06    0.02  0.61     -0.05      0.64      1.03      1.46
+z[2]             0.27    0.01  0.50     -0.66     -0.07      0.27      0.61
+z[3]            -0.59    0.01  0.52     -1.62     -0.93     -0.58     -0.24
+z[4]             0.22    0.01  0.48     -0.68     -0.11      0.21      0.54
+z[5]            -1.22    0.02  0.59     -2.46     -1.61     -1.19     -0.82
+sigma_x         79.63    0.09  3.79     72.14     77.10     79.58     82.20
+sigma_alpha     34.81    0.42 14.18     16.41     24.89     31.52     41.47
+alpha[1]        31.91    0.48 16.75     -2.43     22.02     31.89     42.26
+alpha[2]         7.84    0.47 17.13    -27.66     -2.22      8.31     18.40
+alpha[3]       -18.83    0.48 17.76    -57.05    -29.32    -17.87     -7.69
+alpha[4]         6.09    0.46 16.55    -28.50     -3.64      6.51     16.22
+alpha[5]       -37.87    0.47 16.93    -74.09    -48.14    -37.06    -27.05
+m50_pop[1]    1306.50    0.10  6.35   1293.96   1302.33   1306.54   1310.82
+m50_pop[2]    1282.43    0.11  7.08   1268.88   1277.57   1282.39   1287.45
+m50_pop[3]    1255.77    0.15  9.80   1236.24   1249.26   1255.83   1262.49
+m50_pop[4]    1280.68    0.08  5.56   1269.85   1276.94   1280.64   1284.33
+m50_pop[5]    1236.73    0.12  6.74   1223.34   1232.24   1236.69   1241.25
+mu0_pop[1]    1238.55    0.23 11.00   1217.10   1231.10   1238.43   1245.85
+mu0_pop[2]    1214.47    0.18  9.63   1195.85   1207.94   1214.58   1221.08
+mu0_pop[3]    1187.81    0.24 12.76   1162.30   1179.10   1187.95   1196.50
+mu0_pop[4]    1212.72    0.21 10.31   1192.49   1205.90   1212.66   1219.55
+mu0_pop[5]    1168.77    0.26 11.72   1145.94   1161.00   1168.65   1176.43
+mu1_pop[1]    1374.46    0.16  8.28   1358.13   1368.85   1374.29   1380.09
+mu1_pop[2]    1350.39    0.22 10.80   1329.17   1342.94   1350.40   1357.85
+mu1_pop[3]    1323.73    0.23 11.77   1300.81   1315.79   1323.53   1331.87
+mu1_pop[4]    1348.64    0.18  8.04   1332.40   1343.43   1348.61   1353.91
+mu1_pop[5]    1304.69    0.14  7.91   1289.03   1299.42   1304.82   1310.06
+C0_pop[1]      288.35    0.15  8.22    272.12    282.92    288.27    293.82
+C0_pop[2]      264.28    0.11  7.30    250.07    259.38    264.31    269.27
+C0_pop[3]      237.62    0.18 10.89    216.31    230.12    237.77    244.98
+C0_pop[4]      262.53    0.13  7.93    246.96    257.25    262.33    267.75
+C0_pop[5]      218.58    0.17  8.89    201.10    212.70    218.45    224.44
+C1_pop[1]      275.34    0.10  6.54    262.45    271.00    275.36    279.56
+C1_pop[2]      299.42    0.15  8.76    282.55    293.39    299.50    305.38
+C1_pop[3]      326.08    0.17 10.17    306.58    319.03    326.14    332.84
+C1_pop[4]      301.17    0.09  5.35    290.88    297.53    301.08    304.65
+C1_pop[5]      345.12    0.10  6.45    332.80    340.69    345.04    349.43
+lp__        -15823.74    0.07  2.43 -15829.54 -15825.17 -15823.38 -15822.00
+                97.5% n_eff Rhat
+mu_m50        1308.90  1200    1
+d              164.74  1843    1
+z[1]             2.35  1135    1
+z[2]             1.24  1357    1
+z[3]             0.38  1394    1
+z[4]             1.18  1166    1
+z[5]            -0.14  1165    1
+sigma_x         87.10  1900    1
+sigma_alpha     70.91  1147    1
+alpha[1]        65.48  1231    1
+alpha[2]        41.10  1345    1
+alpha[3]        14.40  1346    1
+alpha[4]        38.93  1281    1
+alpha[5]        -6.04  1305    1
+m50_pop[1]    1319.23  4293    1
+m50_pop[2]    1296.28  4477    1
+m50_pop[3]    1274.64  4064    1
+m50_pop[4]    1291.78  4788    1
+m50_pop[5]    1249.83  3424    1
+mu0_pop[1]    1260.89  2198    1
+mu0_pop[2]    1233.05  2862    1
+mu0_pop[3]    1212.11  2872    1
+mu0_pop[4]    1233.06  2374    1
+mu0_pop[5]    1192.11  2081    1
+mu1_pop[1]    1390.98  2747    1
+mu1_pop[2]    1371.26  2348    1
+mu1_pop[3]    1346.79  2719    1
+mu1_pop[4]    1364.25  1914    1
+mu1_pop[5]    1320.07  3174    1
+C0_pop[1]      304.55  3115    1
+C0_pop[2]      278.73  4468    1
+C0_pop[3]      258.58  3826    1
+C0_pop[4]      278.54  3682    1
+C0_pop[5]      236.25  2822    1
+C1_pop[1]      288.30  4538    1
+C1_pop[2]      316.30  3540    1
+C1_pop[3]      346.03  3702    1
+C1_pop[4]      311.68  3767    1
+C1_pop[5]      358.01  4512    1
+lp__        -15819.99  1185    1
+
+Samples were drawn using NUTS(diag_e) at Fri Oct 11 23:34:47 2024.
+For each parameter, n_eff is a crude measure of effective sample size,
+and Rhat is the potential scale reduction factor on split chains (at 
+convergence, Rhat=1).</code></pre>
+</div>
+</div>
+</section>
+<section id="checking" class="level3">
+<h3 class="anchored" data-anchor-id="checking">Checking</h3>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb87"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb87-1"><a href="#cb87-1" aria-hidden="true" tabindex="-1"></a><span class="fu">check_hmc_diagnostics</span>(fit_d_pop)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+Divergences:</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>0 of 4000 iterations ended with a divergence.</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+Tree depth:</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>0 of 4000 iterations saturated the maximum tree depth of 10.</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+Energy:</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>E-BFMI indicated no pathological behavior.</code></pre>
+</div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb94"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb94-1"><a href="#cb94-1" aria-hidden="true" tabindex="-1"></a>fit_d_pop <span class="sc">|&gt;</span></span>
+<span id="cb94-2"><a href="#cb94-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mcmc_pairs</span>(</span>
+<span id="cb94-3"><a href="#cb94-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">pars =</span> <span class="fu">c</span>(</span>
+<span id="cb94-4"><a href="#cb94-4" aria-hidden="true" tabindex="-1"></a>      <span class="st">"mu_m50"</span>,</span>
+<span id="cb94-5"><a href="#cb94-5" aria-hidden="true" tabindex="-1"></a>      <span class="co"># "m50_pop[1]", "m50_pop[2]","m50_pop[3]","m50_pop[4]","m50_pop[5]","m50_pop[6]",</span></span>
+<span id="cb94-6"><a href="#cb94-6" aria-hidden="true" tabindex="-1"></a>      <span class="st">"d"</span>, <span class="st">"sigma_x"</span>, <span class="st">"sigma_alpha"</span>)</span>
+<span id="cb94-7"><a href="#cb94-7" aria-hidden="true" tabindex="-1"></a>    )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="10_GenerativeClassifiers6_unifgauss_files/figure-html/unnamed-chunk-68-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb95"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb95-1"><a href="#cb95-1" aria-hidden="true" tabindex="-1"></a>fit_d_pop <span class="sc">|&gt;</span></span>
+<span id="cb95-2"><a href="#cb95-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mcmc_pairs</span>(</span>
+<span id="cb95-3"><a href="#cb95-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">pars =</span> <span class="fu">c</span>(</span>
+<span id="cb95-4"><a href="#cb95-4" aria-hidden="true" tabindex="-1"></a>      <span class="st">"mu_m50"</span>,</span>
+<span id="cb95-5"><a href="#cb95-5" aria-hidden="true" tabindex="-1"></a>      <span class="st">"m50_pop[1]"</span>, <span class="st">"m50_pop[2]"</span>,<span class="st">"m50_pop[3]"</span>,<span class="st">"m50_pop[4]"</span>,<span class="st">"m50_pop[5]"</span></span>
+<span id="cb95-6"><a href="#cb95-6" aria-hidden="true" tabindex="-1"></a>      <span class="co"># "d", "sigma_x", "sigma_alpha"</span></span>
+<span id="cb95-7"><a href="#cb95-7" aria-hidden="true" tabindex="-1"></a>      )</span>
+<span id="cb95-8"><a href="#cb95-8" aria-hidden="true" tabindex="-1"></a>    )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="10_GenerativeClassifiers6_unifgauss_files/figure-html/unnamed-chunk-69-1.png" class="img-fluid" width="1920"></p>
+</div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb96"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb96-1"><a href="#cb96-1" aria-hidden="true" tabindex="-1"></a>fit_d_pop <span class="sc">|&gt;</span></span>
+<span id="cb96-2"><a href="#cb96-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mcmc_pairs</span>(</span>
+<span id="cb96-3"><a href="#cb96-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">pars =</span> <span class="fu">c</span>(</span>
+<span id="cb96-4"><a href="#cb96-4" aria-hidden="true" tabindex="-1"></a>      <span class="st">"mu_m50"</span>,</span>
+<span id="cb96-5"><a href="#cb96-5" aria-hidden="true" tabindex="-1"></a>      <span class="st">"alpha[1]"</span>, <span class="st">"alpha[2]"</span>,<span class="st">"alpha[3]"</span>,<span class="st">"alpha[4]"</span>,<span class="st">"alpha[5]"</span>,</span>
+<span id="cb96-6"><a href="#cb96-6" aria-hidden="true" tabindex="-1"></a>      <span class="st">"d"</span>,</span>
+<span id="cb96-7"><a href="#cb96-7" aria-hidden="true" tabindex="-1"></a>      <span class="st">"sigma_x"</span>,</span>
+<span id="cb96-8"><a href="#cb96-8" aria-hidden="true" tabindex="-1"></a>      <span class="st">"sigma_alpha"</span></span>
+<span id="cb96-9"><a href="#cb96-9" aria-hidden="true" tabindex="-1"></a>      )</span>
+<span id="cb96-10"><a href="#cb96-10" aria-hidden="true" tabindex="-1"></a>    )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="10_GenerativeClassifiers6_unifgauss_files/figure-html/unnamed-chunk-70-1.png" class="img-fluid" width="1920"></p>
+</div>
+</div>
+</section>
+</section>
+<section id="plot-posterior-distributions-of-transition-points" class="level2">
+<h2 class="anchored" data-anchor-id="plot-posterior-distributions-of-transition-points">Plot posterior distributions of transition points</h2>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb97"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb97-1"><a href="#cb97-1" aria-hidden="true" tabindex="-1"></a><span class="fu">mcmc_areas</span>(</span>
+<span id="cb97-2"><a href="#cb97-2" aria-hidden="true" tabindex="-1"></a>  fit_d_pop <span class="sc">|&gt;</span> <span class="fu">as.matrix</span>(),</span>
+<span id="cb97-3"><a href="#cb97-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">pars =</span> <span class="fu">c</span>(<span class="st">"mu_m50"</span>, <span class="st">"m50_pop[1]"</span>, <span class="st">"m50_pop[2]"</span>, <span class="st">"m50_pop[3]"</span>, <span class="st">"m50_pop[4]"</span>, <span class="st">"m50_pop[5]"</span>),</span>
+<span id="cb97-4"><a href="#cb97-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">prob =</span> <span class="fl">0.8</span></span>
+<span id="cb97-5"><a href="#cb97-5" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">+</span></span>
+<span id="cb97-6"><a href="#cb97-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_y_discrete</span>(</span>
+<span id="cb97-7"><a href="#cb97-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">labels =</span> <span class="fu">c</span>(</span>
+<span id="cb97-8"><a href="#cb97-8" aria-hidden="true" tabindex="-1"></a>      <span class="st">"mu_m50"</span> <span class="ot">=</span> <span class="st">"Overall mean"</span>,</span>
+<span id="cb97-9"><a href="#cb97-9" aria-hidden="true" tabindex="-1"></a>      <span class="st">"m50_pop[1]"</span> <span class="ot">=</span> popkey<span class="sc">$</span>key[<span class="dv">1</span>],</span>
+<span id="cb97-10"><a href="#cb97-10" aria-hidden="true" tabindex="-1"></a>      <span class="st">"m50_pop[2]"</span> <span class="ot">=</span> popkey<span class="sc">$</span>key[<span class="dv">2</span>],</span>
+<span id="cb97-11"><a href="#cb97-11" aria-hidden="true" tabindex="-1"></a>      <span class="st">"m50_pop[3]"</span> <span class="ot">=</span> popkey<span class="sc">$</span>key[<span class="dv">3</span>],</span>
+<span id="cb97-12"><a href="#cb97-12" aria-hidden="true" tabindex="-1"></a>      <span class="st">"m50_pop[4]"</span> <span class="ot">=</span> popkey<span class="sc">$</span>key[<span class="dv">4</span>],</span>
+<span id="cb97-13"><a href="#cb97-13" aria-hidden="true" tabindex="-1"></a>      <span class="st">"m50_pop[5]"</span> <span class="ot">=</span> popkey<span class="sc">$</span>key[<span class="dv">5</span>])) <span class="sc">+</span></span>
+<span id="cb97-14"><a href="#cb97-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">xlab</span>(<span class="st">"Transition length"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Scale for y is already present.
+Adding another scale for y, which will replace the existing scale.</code></pre>
+</div>
+<div class="cell-output-display">
+<p><img src="10_GenerativeClassifiers6_unifgauss_files/figure-html/unnamed-chunk-71-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<!-- ## Simulate data -->
+<!-- ```{r} -->
+<!-- # Simulate some data -->
+<!-- set.seed(123) -->
+<!-- N <- 1000  # Total number of data points -->
+<!-- J <- 5    # Number of populations -->
+<!-- pop <- sample(1:J, N, replace = TRUE) -->
+<!-- # Generate data for each population -->
+<!-- mu_m50 <- 1300 -->
+<!-- d <- 200 -->
+<!-- mu_mu0 <- mu_m50 - d / 2 -->
+<!-- mu_mu1 <- mu_m50 + d / 2 -->
+<!-- sigma_alpha <- 20 -->
+<!-- sigma_x <- 50 -->
+<!-- mu0_pop <- rnorm(J, mu_mu0, sigma_alpha) -->
+<!-- mu1_pop <- rnorm(J, mu_mu1, sigma_alpha) -->
+<!-- x <- numeric(N) -->
+<!-- y <- rbinom(N, 1, 0.5) -->
+<!-- for (i in 1:N) { -->
+<!--   if (y[i] == 0) { -->
+<!--     x[i] <- rnorm(1, mean=mu0_pop[pop[i]], sd=sigma_x) -->
+<!--   } else { -->
+<!--     x[i] <- rnorm(1, mean=mu1_pop[pop[i]], sd=sigma_x) -->
+<!--   } -->
+<!-- } -->
+<!-- # Prepare data for Stan -->
+<!-- data_list_populations <- list( -->
+<!--   N = N, -->
+<!--   x = x, -->
+<!--   y = y, -->
+<!--   J = J, -->
+<!--   pop = pop -->
+<!-- ) -->
+<!-- ``` -->
+<!-- ### Fit to simulated data -->
+<!-- ```{r} -->
+<!-- # Fit the model using rstan -->
+<!-- fit_populations <- sampling( -->
+<!--   stan_gen04_populations, -->
+<!--   data = data_list_populations, -->
+<!--   chains = 4, -->
+<!--   # iter = 2000, -->
+<!--   # warmup = 500, -->
+<!--   cores = 4, -->
+<!--   control = list(adapt_delta = 0.95) -->
+<!-- ) -->
+<!-- ``` -->
+</section>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (event) {
+  const toggleBodyColorMode = (bsSheetEl) => {
+    const mode = bsSheetEl.getAttribute("data-mode");
+    const bodyEl = window.document.querySelector("body");
+    if (mode === "dark") {
+      bodyEl.classList.add("quarto-dark");
+      bodyEl.classList.remove("quarto-light");
+    } else {
+      bodyEl.classList.add("quarto-light");
+      bodyEl.classList.remove("quarto-dark");
+    }
+  }
+  const toggleBodyColorPrimary = () => {
+    const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+    if (bsSheetEl) {
+      toggleBodyColorMode(bsSheetEl);
+    }
+  }
+  toggleBodyColorPrimary();  
+  const icon = "";
+  const anchorJS = new window.AnchorJS();
+  anchorJS.options = {
+    placement: 'right',
+    icon: icon
+  };
+  anchorJS.add('.anchored');
+  const isCodeAnnotation = (el) => {
+    for (const clz of el.classList) {
+      if (clz.startsWith('code-annotation-')) {                     
+        return true;
+      }
+    }
+    return false;
+  }
+  const clipboard = new window.ClipboardJS('.code-copy-button', {
+    text: function(trigger) {
+      const codeEl = trigger.previousElementSibling.cloneNode(true);
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+  });
+  clipboard.on('success', function(e) {
+    // button target
+    const button = e.trigger;
+    // don't keep focus
+    button.blur();
+    // flash "checked"
+    button.classList.add('code-copy-button-checked');
+    var currentTitle = button.getAttribute("title");
+    button.setAttribute("title", "Copied!");
+    let tooltip;
+    if (window.bootstrap) {
+      button.setAttribute("data-bs-toggle", "tooltip");
+      button.setAttribute("data-bs-placement", "left");
+      button.setAttribute("data-bs-title", "Copied!");
+      tooltip = new bootstrap.Tooltip(button, 
+        { trigger: "manual", 
+          customClass: "code-copy-button-tooltip",
+          offset: [0, -8]});
+      tooltip.show();    
+    }
+    setTimeout(function() {
+      if (tooltip) {
+        tooltip.hide();
+        button.removeAttribute("data-bs-title");
+        button.removeAttribute("data-bs-toggle");
+        button.removeAttribute("data-bs-placement");
+      }
+      button.setAttribute("title", currentTitle);
+      button.classList.remove('code-copy-button-checked');
+    }, 1000);
+    // clear code selection
+    e.clearSelection();
+  });
+  function tippyHover(el, contentFn) {
+    const config = {
+      allowHTML: true,
+      content: contentFn,
+      maxWidth: 500,
+      delay: 100,
+      arrow: false,
+      appendTo: function(el) {
+          return el.parentElement;
+      },
+      interactive: true,
+      interactiveBorder: 10,
+      theme: 'quarto',
+      placement: 'bottom-start'
+    };
+    window.tippy(el, config); 
+  }
+  const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+  for (var i=0; i<noterefs.length; i++) {
+    const ref = noterefs[i];
+    tippyHover(ref, function() {
+      // use id or data attribute instead here
+      let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+      try { href = new URL(href).hash; } catch {}
+      const id = href.replace(/^#\/?/, "");
+      const note = window.document.getElementById(id);
+      return note.innerHTML;
+    });
+  }
+      let selectedAnnoteEl;
+      const selectorForAnnotation = ( cell, annotation) => {
+        let cellAttr = 'data-code-cell="' + cell + '"';
+        let lineAttr = 'data-code-annotation="' +  annotation + '"';
+        const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+        return selector;
+      }
+      const selectCodeLines = (annoteEl) => {
+        const doc = window.document;
+        const targetCell = annoteEl.getAttribute("data-target-cell");
+        const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+        const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+        const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+        const lineIds = lines.map((line) => {
+          return targetCell + "-" + line;
+        })
+        let top = null;
+        let height = null;
+        let parent = null;
+        if (lineIds.length > 0) {
+            //compute the position of the single el (top and bottom and make a div)
+            const el = window.document.getElementById(lineIds[0]);
+            top = el.offsetTop;
+            height = el.offsetHeight;
+            parent = el.parentElement.parentElement;
+          if (lineIds.length > 1) {
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+            height = bottom - top;
+          }
+          if (top !== null && height !== null && parent !== null) {
+            // cook up a div (if necessary) and position it 
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
+            }
+            div.style.top = top - 2 + "px";
+            div.style.height = height + 4 + "px";
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
+            }
+            gutterDiv.style.top = top - 2 + "px";
+            gutterDiv.style.height = height + 4 + "px";
+          }
+          selectedAnnoteEl = annoteEl;
+        }
+      };
+      const unselectCodeLines = () => {
+        const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+        elementsIds.forEach((elId) => {
+          const div = window.document.getElementById(elId);
+          if (div) {
+            div.remove();
+          }
+        });
+        selectedAnnoteEl = undefined;
+      };
+      // Attach click handler to the DT
+      const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+      for (const annoteDlNode of annoteDls) {
+        annoteDlNode.addEventListener('click', (event) => {
+          const clickedEl = event.target;
+          if (clickedEl !== selectedAnnoteEl) {
+            unselectCodeLines();
+            const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+            if (activeEl) {
+              activeEl.classList.remove('code-annotation-active');
+            }
+            selectCodeLines(clickedEl);
+            clickedEl.classList.add('code-annotation-active');
+          } else {
+            // Unselect the line
+            unselectCodeLines();
+            clickedEl.classList.remove('code-annotation-active');
+          }
+        });
+      }
+  const findCites = (el) => {
+    const parentEl = el.parentElement;
+    if (parentEl) {
+      const cites = parentEl.dataset.cites;
+      if (cites) {
+        return {
+          el,
+          cites: cites.split(' ')
+        };
+      } else {
+        return findCites(el.parentElement)
+      }
+    } else {
+      return undefined;
+    }
+  };
+  var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+  for (var i=0; i<bibliorefs.length; i++) {
+    const ref = bibliorefs[i];
+    const citeInfo = findCites(ref);
+    if (citeInfo) {
+      tippyHover(citeInfo.el, function() {
+        var popup = window.document.createElement('div');
+        citeInfo.cites.forEach(function(cite) {
+          var citeDiv = window.document.createElement('div');
+          citeDiv.classList.add('hanging-indent');
+          citeDiv.classList.add('csl-entry');
+          var biblioDiv = window.document.getElementById('ref-' + cite);
+          if (biblioDiv) {
+            citeDiv.innerHTML = biblioDiv.innerHTML;
+          }
+          popup.appendChild(citeDiv);
+        });
+        return popup.innerHTML;
+      });
+    }
+  }
+});
+</script>
+</div> <!-- /content -->
+
+
+
+</body></html>

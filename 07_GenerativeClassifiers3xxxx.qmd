@@ -1,0 +1,226 @@
+---
+titlee: "Generative Classifier Models 2"
+author: ""
+format: 
+  html:
+    toc: true
+---
+
+```{r}
+#| message: false
+library(tidyverse)
+library(rstan)
+library(brms)
+library(truncnorm)
+```
+
+# Introduction
+
+# Data
+
+
+```{r}
+d <- read_csv("Data/LHDC.csv") |> 
+  filter(!(Population == "Southwest Atlantic" & !is.na(OWt))) |> 
+  transmute(
+    Population,
+    Country,
+    Sex,
+    Stage = as_factor(LS_Score),
+    Length = TL
+  )
+```
+
+```{r}
+d |> 
+  filter(Stage != 2.3) |> 
+  group_by(Population, Stage, Sex) |> 
+  summarise(n = n()) |> 
+  pivot_wider(
+    names_from = Stage,
+    values_from = n
+    )
+```
+
+## Get Aus data
+
+```{r}
+da <- d |> filter(Population == "Australia")
+```
+
+
+```{r}
+da |> 
+  # filter(Length > 1100) |> 
+  ggplot() +
+  aes(x = Length, fill = factor(Stage), group = Stage) +
+  geom_histogram() + 
+  facet_grid(
+    rows = vars(Stage),
+    cols = vars(Sex),
+    scales = "free_y"
+    ) +
+  ggtitle("Australian data")
+```
+
+
+```{r}
+da |> 
+  # filter(Length > 1100) |> 
+  ggplot() +
+  aes(x = Length, fill = factor(Stage), group = Stage) +
+  geom_histogram(position = "stack") + 
+  facet_grid(
+    cols = vars(Sex),
+    scales = "free_y"
+    ) +
+  ggtitle("Australian data")
+```
+
+
+
+```{r}
+da |> 
+  # filter(Length > 1100) |> 
+  ggplot() +
+  aes(x = Length, fill = factor(Stage), group = Stage) +
+  geom_density(position = "stack", col = NA, bw=50) + 
+  facet_grid(
+    cols = vars(Sex),
+    scales = "free_y"
+    ) +
+  ggtitle("Australian data")
+```
+
+## All data
+
+```{r}
+#| fig-height: 8
+#| fig-width: 6
+
+d |> 
+  filter(Length > 1050 & Length < 1650) |>
+  ggplot() +
+  aes(x = Length, fill = factor(Stage), group = Stage) +
+  geom_density(alpha = .5, col = NA) + 
+  facet_grid(
+    cols = vars(Sex),
+    rows = vars(Population),
+    scales = "free_y"
+    ) 
+```
+
+
+
+```{r}
+#| fig-height: 8
+#| fig-width: 6
+
+d |> 
+  filter(Length > 1050 & Length < 1650) |>
+  ggplot() +
+  aes(x = Length, fill = factor(Stage), group = Stage) +
+  geom_histogram(alpha = .5, col = NA, position = "stack") + 
+  facet_grid(
+    cols = vars(Sex),
+    rows = vars(Population)
+    ) +
+  ggtitle("Stacked histogram")
+```
+
+```{r}
+#| fig-height: 8
+#| fig-width: 6
+
+d |> 
+  filter(Length > 1050 & Length < 1650) |>
+  ggplot() +
+  aes(x = Length, fill = factor(Stage), group = Stage) +
+  geom_histogram(alpha = .5, col = NA, position = "identity") + 
+  facet_grid(
+    cols = vars(Sex),
+    rows = vars(Population)
+    ) 
+```
+
+# Generative complementary model
+
+Obtained from chatgpt on 2024-10-08
+
+
+## Stan Code
+
+```{r}
+stan_gen03 <- stan_model(file = 'gen03.stan')
+```
+
+
+## R Code to Fit the Model
+
+```{r}
+# Simulate data
+set.seed(123)
+n0 <- 50  # Number of samples for class 0
+n1 <- 5 * n0  # Number of samples for class 1
+N <- n0 + n1
+
+# Parameters for simulation
+m50_true <- 1300
+sigma_x_true <- 100
+k_true <- 1  # Distance factor between class 0 and 1 means
+
+# Simulated x values
+mu0_true <- m50_true - k_true * sigma_x_true
+mu1_true <- m50_true + k_true * sigma_x_true
+x0 <- rnorm(n0, mean = mu0_true, sd = sigma_x_true)
+x1 <- rnorm(n1, mean = mu1_true, sd = sigma_x_true)
+x <- c(x0, x1)
+
+# Simulated y values
+y <- c(rep(0, n0), rep(1, n1))
+
+# Data for Stan
+data_list <- list(
+  N = N,
+  x = x,
+  y = y,
+  k = 1  #  can adjust this if necessary
+)
+```
+
+```{r}
+data.frame(x=x,y=y) |> 
+  ggplot() +
+  aes(x = x, fill = factor(y), group = y) +
+  geom_histogram(alpha = .5, col = NA, position = "identity") 
+```
+```{r}
+# Fit the model using rstan
+fit <- stan(
+  file = "gen03.stan", 
+  data = data_list,
+  chains = 4,
+  # iter = 2000,
+  # warmup = 500,
+  cores = 4,
+  control = list(adapt_delta = 0.95)
+)
+```
+
+
+```{r}
+# Extract and summarize results
+print(fit, pars = c("m50", "sigma_x"))
+
+# Plot posterior distribution of m50
+posterior <- extract(fit)$m50
+ggplot(data.frame(m50 = posterior), aes(x = m50)) +
+  geom_density(fill = "skyblue") +
+  geom_vline(xintercept = m50_true, color = "red", linetype = "dashed") +
+  ggtitle("Posterior distribution of m50") +
+  theme_minimal()
+
+# Check for bias by comparing estimated m50 with true m50
+mean(posterior)
+```
+

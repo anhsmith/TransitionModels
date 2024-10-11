@@ -1,0 +1,163 @@
+---
+title: "Untitled"
+format: html
+---
+
+
+```{r}
+#| message: false
+library(tidyverse)
+library(rstan)
+library(bayesplot)
+library(posterior)
+theme_set(theme_bw())
+```
+
+## Show
+
+```{r}
+source("plateau_gaussian_density.R")
+```
+
+
+
+```{r}
+tibble(y =00:2000) |> 
+  rowwise() |> 
+  mutate(
+    d = plateau_gaussian_density(y, 800, 400, 100, 200)
+  ) |> 
+  ggplot() + 
+  aes(x=y,y=d) +
+  geom_line()
+```
+
+
+## Load data
+
+```{r}
+dat <- read_csv("Data/LHDC.csv") |> 
+  filter(!(Population == "Southwest Atlantic" & !is.na(OWt))) |> 
+  transmute(
+    Population,
+    Country,
+    Sex,
+    Stage = as_factor(LS_Score),
+    Length = TL
+  )
+```
+
+## Subset of data
+
+```{r}
+dat_nz3 <- dat |> 
+  filter(Population == "New Zealand" & Stage == "3" & Length < 1750) 
+```
+
+```{r}
+dat_nz3 |> ggplot() + aes(x = Length) + geom_histogram()
+```
+
+## Original
+
+```{r}
+stan_plateau_gaussian <- stan_model(file = 'plateau_gaussian_density.stan')
+```
+
+```{r}
+fit_gaussian_nz3 <- sampling(
+  stan_plateau_gaussian, 
+  data = list( N = nrow(dat_nz3), y = dat_nz3$Length ),
+  chains = 4,
+  # iter = 2000,
+  # warmup = 500,
+  cores = 4,
+  control = list(adapt_delta = 0.95)
+)
+
+fit_gaussian_nz3
+```
+## Log density
+
+```{r}
+stan_plateau_log_gaussian <- stan_model(file = 'plateau_gaussian_log_density.stan')
+```
+
+```{r}
+fit_log_gaussian_nz3 <- sampling(
+  stan_plateau_log_gaussian, 
+  data = list( N = nrow(dat_nz3), y = dat_nz3$Length ),
+  chains = 4,
+  # iter = 2000,
+  # warmup = 500,
+  cores = 4,
+  control = list(adapt_delta = 0.95)
+)
+
+fit_log_gaussian_nz3
+```
+## Vectorised
+
+```{r}
+stan_plateau_log_gaussian_vectorised <- stan_model(file = 'plateau_gaussian_log_density_vectorised.stan')
+```
+
+
+```{r}
+fit_log_gaussian_vectorised_nz3 <- sampling(
+  stan_plateau_log_gaussian_vectorised, 
+  data = list( N = nrow(dat_nz3), y = dat_nz3$Length ),
+  chains = 4,
+  # iter = 2000,
+  # warmup = 500,
+  cores = 4,
+  control = list(adapt_delta = 0.95)
+)
+
+fit_log_gaussian_vectorised_nz3
+```
+MUCH FASTER!
+
+# Check output
+
+```{r}
+g_dens_nz1 <- dat_nz3 |> ggplot() + geom_density(aes(x=Length))
+g_dens_nz1
+```
+
+```{r}
+g_dens_nz1 + 
+  geom_line(
+    data = fit_log_gaussian_nz3 |> 
+      as_draws_df() |> 
+      thin_draws(thin = 40) |> 
+      expand_grid(x = seq(from=1100, to=1750, length=500)) |> 
+      rowwise() |> 
+      mutate(
+        p = plateau_gaussian_density(x, mu, delta, sigma1, sigma2) 
+      ),
+    mapping = aes(x = x, y = p, group = .draw),
+    alpha = .1,
+    col=2
+  )
+```
+
+# Just multiply by the normalising constant to set height to 1
+
+```{r}
+ggplot() + 
+  geom_line(
+    data = fit_log_gaussian_nz3 |> 
+      as_draws_df() |> 
+      thin_draws(thin = 40) |> 
+      expand_grid(x = seq(from=1100, to=1750, length=500)) |> 
+      rowwise() |> 
+      mutate(
+        p = plateau_gaussian_density(x, mu, delta, sigma1, sigma2) * C
+      ),
+    mapping = aes(x = x, y = p, group = .draw),
+    alpha = .1,
+    col=2
+  )
+```
+

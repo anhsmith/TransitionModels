@@ -1,0 +1,345 @@
+---
+titlee: "Generative Classifier Models 2"
+author: ""
+format: 
+  html:
+    toc: true
+---
+
+```{r}
+#| message: false
+library(tidyverse)
+library(rstan)
+library(brms)
+library(truncnorm)
+```
+
+# Introduction
+
+# Data
+
+
+```{r}
+d <- read_csv("Data/LHDC.csv") |> 
+  filter(!(Population == "Southwest Atlantic" & !is.na(OWt))) |> 
+  transmute(
+    Population,
+    Country,
+    Sex,
+    Stage = as_factor(LS_Score),
+    Length = TL
+  )
+```
+
+```{r}
+d |> 
+  filter(Stage != 2.3) |> 
+  group_by(Population, Stage, Sex) |> 
+  summarise(n = n()) |> 
+  pivot_wider(
+    names_from = Stage,
+    values_from = n
+    )
+```
+
+## Get Aus data
+
+```{r}
+da <- d |> filter(Population == "Australia")
+```
+
+
+```{r}
+da |> 
+  # filter(Length > 1100) |> 
+  ggplot() +
+  aes(x = Length, fill = factor(Stage), group = Stage) +
+  geom_histogram() + 
+  facet_grid(
+    rows = vars(Stage),
+    cols = vars(Sex),
+    scales = "free_y"
+    ) +
+  ggtitle("Australian data")
+```
+
+
+```{r}
+da |> 
+  # filter(Length > 1100) |> 
+  ggplot() +
+  aes(x = Length, fill = factor(Stage), group = Stage) +
+  geom_histogram(position = "stack") + 
+  facet_grid(
+    cols = vars(Sex),
+    scales = "free_y"
+    ) +
+  ggtitle("Australian data")
+```
+
+
+
+```{r}
+da |> 
+  # filter(Length > 1100) |> 
+  ggplot() +
+  aes(x = Length, fill = factor(Stage), group = Stage) +
+  geom_density(position = "stack", col = NA, bw=50) + 
+  facet_grid(
+    cols = vars(Sex),
+    scales = "free_y"
+    ) +
+  ggtitle("Australian data")
+```
+
+## All data
+
+```{r}
+#| fig-height: 8
+#| fig-width: 6
+
+d |> 
+  filter(Length > 1000 & Length < 1600) |>
+  ggplot() +
+  aes(x = Length, fill = factor(Stage), group = Stage) +
+  geom_density(alpha = .5, col = NA) + 
+  facet_grid(
+    cols = vars(Sex),
+    rows = vars(Population),
+    scales = "free_y"
+    ) 
+```
+
+
+
+```{r}
+#| fig-height: 8
+#| fig-width: 6
+
+d |> 
+  filter(Length > 1050 & Length < 1650) |>
+  ggplot() +
+  aes(x = Length, fill = factor(Stage), group = Stage) +
+  geom_histogram(alpha = .5, col = NA, position = "stack") + 
+  facet_grid(
+    cols = vars(Sex),
+    rows = vars(Population)
+    ) +
+  ggtitle("Stacked histogram")
+```
+
+
+
+# Generative model both sexes
+
+```{r}
+d23 <- d |> 
+  filter(
+    Length > 1050,
+    Length < 1650,
+    Population != "Northeast Pacific") |>
+  mutate(Sex = Sex |> 
+           fct_recode(Male = "M", Female = "F") |> 
+           fct_relevel("Male", "Female"),
+         Stage = Stage |> 
+           fct_recode(Immature = "2", Mature = "3") 
+         ) |> 
+  droplevels()
+```
+
+
+
+
+```{r}
+#| fig-height: 8
+#| fig-width: 6
+
+d23 |> 
+  ggplot() +
+  aes(x = Length) +
+  geom_histogram(alpha = .5, col = NA, position = "identity") + 
+  facet_grid(
+    cols = vars(Sex),
+    rows = vars(Population)
+    ) 
+```
+
+```{r}
+#| fig-height: 8
+#| fig-width: 6
+
+d23 |> 
+  ggplot() +
+  aes(x = Length) +
+  geom_density(alpha = .5, position = "identity") + 
+  facet_grid(
+    # cols = vars(Sex),
+    rows = vars(Population)
+    ) 
+```
+
+```{r}
+#| fig-height: 8
+#| fig-width: 6
+
+d23 |> 
+  ggplot() +
+  aes(x = Length, group = Stage, fill = Stage) +
+  geom_histogram(alpha = .5, position = "identity")
+```
+
+```{r}
+#| fig-height: 8
+#| fig-width: 6
+
+d23 |> 
+  ggplot() +
+  aes(x = Length, fill = Stage, group = Stage) +
+  geom_histogram(alpha = .5, col = NA, position = "identity") + 
+  facet_grid(
+    cols = vars(Sex),
+    rows = vars(Population)
+    ) 
+```
+
+
+## `glmmTMB`
+
+```{r}
+library(glmmTMB)
+```
+
+
+```{r}
+g1 <- glmmTMB(
+  Length ~ 0 + Stage + Sex + ( 0 + Stage | Population ),
+  data = d23
+)
+
+g1 |> summary()
+
+```
+
+
+```{r}
+g2 <- glmmTMB(
+  Length ~ 0 + Stage + Sex + ( 1 | Population ),
+  data = d23
+)
+
+g2 |> summary()
+
+```
+
+
+## `brms`
+
+```{r}
+#| cache: true
+m1 <- brm(
+  Length ~ 0 + Stage + Sex + ( 0 + Stage | Population ),
+  data = d23,
+  chains = 4,
+  cores = 4,
+  control = list(adapt_delta = 0.99)
+)
+
+```
+
+
+```{r}
+#| cache: true
+m2 <- brm(
+  Length ~ 0 + Stage + Sex + ( 1 | Population ),
+  data = d23,
+  chains = 4,
+  cores = 4,
+  control = list(adapt_delta = 0.99)
+)
+
+```
+```{r}
+m1 <- add_criterion(m1, "loo")
+m2 <- add_criterion(m2, "loo")
+```
+
+```{r}
+loo_compare(m1, m2)
+```
+```{r}
+saveRDS(m1, "m1.rds")
+saveRDS(m2, "m2.rds")
+# m1 <- readRDS("m1.rds")
+# m2 <- readRDS("m2.rds")
+```
+
+
+
+```{r}
+ranef(m1)
+```
+
+```{r}
+plot(m1)
+```
+
+
+```{r}
+library(marginaleffects)
+```
+
+```{r}
+# pred <- predictions(m1, newdata = datagrid(FUN_factor = unique))
+```
+
+
+# Generative model just males
+
+```{r}
+d23m <- d23 |> filter(Sex == "Male")
+```
+
+
+```{r}
+#| cache: true
+mm1 <- brm(
+  Length ~ 0 + Stage + ( 0 + Stage | Population ),
+  data = d23m,
+  chains = 4,
+  cores = 4,
+  control = list(adapt_delta = 0.99)
+)
+
+```
+
+```{r}
+#| cache: true
+mm2 <- brm(
+  Length ~ 0 + Stage + ( 1 | Population ),
+  data = d23m,
+  chains = 4,
+  cores = 4,
+  control = list(adapt_delta = 0.99)
+)
+
+```
+
+
+```{r}
+mm1 <- add_criterion(mm1, "loo")
+mm2 <- add_criterion(mm2, "loo")
+```
+
+```{r}
+loo_compare(mm1, mm2)
+```
+
+
+```{r}
+saveRDS(mm1, "mm1.rds")
+saveRDS(mm2, "mm2.rds")
+# mm1 <- readRDS("mm1.rds")
+# mm2 <- readRDS("mm2.rds")
+```
+
+

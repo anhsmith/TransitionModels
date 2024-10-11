@@ -1,0 +1,1152 @@
+---
+title: "Uniform-Gaussian Generative Classifier"
+author: "Adam Smith"
+date: today
+format: 
+  html:
+    toc: true
+---
+
+```{r}
+#| message: false
+library(tidyverse)
+library(rstan)
+library(bayesplot)
+library(posterior)
+theme_set(theme_bw())
+```
+
+```{r}
+#| fig-width: 5
+#| fig-height: 10
+
+# graph code
+
+```
+
+
+# Introduction
+
+## Problem
+
+This document describes and fits a generative classifier model for estimating the length at which an animal transitions from immature to mature, based on a dataset of individuals that are either mature ($y$=0) or immature ($y$=1), with lengths ($x$).
+
+Current methods of estimating transition lengths have problems.
+
+Ad hoc methods (e.g., midpoint between smallest mature and largest immature) have no scientific basis and are not probabilistic.
+
+Discriminative classifiers, such as logistic regression, explicitly model the probability of $y$=1 for each value of $x$. As such, they are very sensitive to unbalanced sample sizes of immature and mature, which is very common.
+
+Generative classifiers, such as linear discriminant analysis (LDA), model the distributions of $x | y = 0$ and $x | y = 1$. The probability that $y = 1 | x$ is given by Bayes rule, essentially comparing the relative densities of the two distributions. Generative classifiers are not so sensitive to outliers because the densities. However, if a conventional distribution such as the Gaussian (as in LDA) is used, the output can be heavily influenced by data that are far away from the transition range. For example, if the transition range is around 1000, the mean and standard deviation can be heavily influenced by including points in the 200-500 range, and this affects estimates of the transition probability. Whereas, the location of the transition range should only really be informed by points that are close to the transition range.
+
+The influence of data at the opposite side of the distributions from the transition range can be ameliorated to some degree by truncating the data. However, the results are then quite heavily influenced by the choice of truncation points. The further away from the transition range one places the truncation point, the more bias is placed in the direction of that transition point. 
+
+What is required is a generative model that is (1) robust to unbalanced sample sizes and (2) not unduly influenced by data that are not nearby the transition range in terms of their values of $x$.  
+
+## Solution
+
+Here, we overcome these challenges by fitting a mixture of a Gaussian and a uniform distribution. The left ($y = 0$) group is modelled with a uniform on the left that begins at the lower truncation value. The distribution remains flat until it approaches the transition range, at which point the distribution declines according to a Gaussian. The right ($y = 1$) group increases according to a Gaussian distribution and then levels off to a uniform, terminating at the upper truncation value. 
+
+# Summary from ChatGPT
+
+## Model Summary
+
+This model describes a hierarchical Bayesian framework for classifying observations $x$ into two categories $y \in \{0, 1\}$ based on the location of $x$ relative to a transition point $m_{50}$. The distribution of $x$ is assumed to be piecewise, combining uniform and Gaussian components to capture distinct behaviors on either side of the transition point. Specifically, the model assumes that the distribution of $x$ for $y = 0$ (immature individuals) has a uniform shape up to a point $\mu_0$, after which it follows a Gaussian decay. For $y = 1$ (mature individuals), the distribution is uniform after a point $\mu_1$, with a Gaussian shape below this threshold.
+
+The transition point $m_{50}$ is a key parameter, representing the value of $x$ where the probability of observing $y = 0$ or $y = 1$ is equal. This model also includes parameters for the spread of the transition zone (parameter $d$) and the variability in observations (parameter $\sigma$).
+
+By allowing for different behaviors on either side of $m_{50}$, this model offers a flexible framework that can capture asymmetric patterns in the data. Its strengths lie in the ability to model transition regions between distinct populations with both uniform and Gaussian behaviors, which may be useful when the boundary between groups is not sharp but exhibits a gradual overlap.
+
+
+## Likelihood
+
+The likelihood for the model is based on two different unnormalized log-density functions for the two categories $y$.
+
+For $y = 0$ (immature), the log-density function is piecewise uniform and Gaussian for $x$ values below and above $\mu_0$ respectively:
+
+$$
+f(x_i | y_i = 0, \mu_0, \sigma, L) = 
+\begin{cases} 
+    0 & \text{if } x_i \leq \mu_0 \\
+    -\frac{(x_i - \mu_0)^2}{2\sigma^2} & \text{if } x_i > \mu_0 
+\end{cases}
+$$
+
+For $y = 1$ (mature), the log-density function is similarly piecewise for $x$ values below and above $\mu_1$:
+
+$$
+f(x_i | y_i = 1, \mu_1, \sigma, U) = 
+\begin{cases} 
+    -\frac{(x_i - \mu_1)^2}{2\sigma^2} & \text{if } x_i < \mu_1 \\
+    0 & \text{if } x_i \geq \mu_1 
+\end{cases}
+$$
+
+The overall likelihood contribution for each observation is:
+
+$$
+\log \text{likelihood for } y_i = 0: \quad \log(f(x_i)) - \log(C_0)
+$$
+
+$$
+\log \text{likelihood for } y_i = 1: \quad \log(f(x_i)) - \log(C_1)
+$$
+
+where $C_0$ and $C_1$ are normalization constants ensuring the densities integrate to 1:
+
+$$
+C_0 = \sqrt{2\pi} \cdot \sigma / 2 + (\mu_0 - L)
+$$
+
+$$
+C_1 = \sqrt{2\pi} \cdot \sigma / 2 + (U - \mu_1)
+$$
+
+## Priors
+
+The priors for the model parameters are chosen as follows:
+
+- The transition point $m_{50}$ is modeled as:
+$$
+m_{50} \sim \mathcal{N}(1300, 50)
+$$
+
+- The difference between the means for the two categories, $d$, follows:
+$$
+d \sim \mathcal{N}(100, 100)
+$$
+
+- The standard deviation $\sigma$ is given a prior:
+$$
+\sigma \sim \mathcal{N}(100, 50)
+$$
+
+## Transformed Parameters
+
+The means for each group are defined in terms of $m_{50}$ and $d$:
+
+$$
+\mu_0 = m_{50} - \frac{d}{2}, \quad \mu_1 = m_{50} + \frac{d}{2}
+$$
+
+## Full Model
+
+The full model combines the log-likelihood contributions for each observation across $N$ observations:
+
+$$
+\log p(x, y | m_{50}, d, \sigma) = \sum_{i=1}^{N} \left( \log(f(x_i | y_i, \mu_{y_i}, \sigma)) - \log(C_{y_i}) \right)
+$$
+
+## Advantages of the Model
+
+1. **Piecewise Density**: The piecewise construction of the likelihood allows the model to handle a uniform distribution over a region and a Gaussian distribution beyond it, reflecting real-world situations where individuals in one class (e.g., immature) cluster within certain bounds but then trail off gradually.
+
+2. **Flexibility in Transition**: The model can flexibly adjust the width of the transition zone between classes via the $d$ parameter, allowing for asymmetric transition regions.
+
+3. **Bayesian Inference**: This approach allows for a full Bayesian treatment, including the incorporation of prior information and the ability to quantify uncertainty in the transition point and other parameters.
+
+4. **Normalization**: The use of normalization constants ensures that the densities are properly scaled, which is critical for ensuring a valid probabilistic model.
+
+This model is well-suited for applications where the distinction between categories is not sharp, but rather involves gradual transitions that can be captured through a combination of uniform and Gaussian behaviors.
+
+# Compile Stan Code
+
+```{r}
+#| cache: true
+
+stan_uniform_gaussian_twogroups <- stan_model(file = 'uniform_gaussian_twogroups.stan')
+```
+
+## Print
+
+```{r}
+stan_uniform_gaussian_twogroups |> get_stancode() |> cat()
+```
+
+
+# Initial test
+
+## Load funcitons
+
+```{r}
+source("uniform_gaussian_density.R")
+```
+
+## Plot
+
+```{r}
+tibble(y = 900:2000) |> 
+  rowwise() |> 
+  mutate(
+    d = uniform_left_gaussian_density(
+      y, mu = 1200, sigma = 200, L = 1000)
+  ) |> 
+  ggplot() + 
+  aes(x=y,y=d) +
+  geom_line()
+```
+## Integrate
+
+```{r}
+library(pracma)  # For numerical integration
+
+# Define parameters
+mu <- 120
+sigma <- 1
+L <- 10
+
+# Define the integration range
+integrate_density <- function(y) {
+  uniform_left_gaussian_density(y, mu, sigma, L)
+}
+
+# Perform numerical integration over a wide range to cover all regions
+area_under_curve <- integral(integrate_density, L - 500, mu + 500)
+print(area_under_curve)
+```
+Should return 1
+
+# Utility functions
+
+## `get_estimates`
+
+```{r}
+get_estimates <- function(fit, L, U, thin=20) {
+  fit |> 
+    as_draws_df() |> 
+    thin_draws(thin = thin) |>
+    expand_grid(x = seq(from=L, to=U, length=1000)) |> 
+    rowwise() |>
+    mutate(
+      d0 = uniform_left_gaussian_density(x, mu_0, sigma, L),
+      d1 = uniform_right_gaussian_density(x, mu_1, sigma, U)
+      ) |> 
+    ungroup() |>
+    mutate(
+      n0 = d0 * C_0,
+      n1 = d1 * C_1,
+      p = n1 / ( n0 + n1 ),
+      p_normalised = d1 / ( d0 + d1 ),
+      p50 = p > 0.5,
+      p50_normalised = p_normalised > 0.5
+    )
+}
+```
+
+## `plot_cutpoint_estimates`
+
+```{r}
+plot_cutpoint_estimates <- function(dat) {
+
+  # post_d_nz |>
+  dat |>
+    group_by(.draw) |> 
+    summarise(
+      p50 = min(x[p50], na.rm = TRUE),
+      p50_normalised = min(x[p50_normalised], na.rm = TRUE) ,
+      m50 = first(m50)
+    ) |> 
+    pivot_longer(cols = p50:m50, names_to = "Estimate", values_to = "Transition point") |> 
+    ggplot() + 
+    aes(x = `Transition point`, colour = `Estimate`) +
+    geom_density()
+}
+```
+
+
+## `plot_dist_transition`
+
+```{r}
+plot_dist_transition <- function(estimates, dat, L, U) {
+  
+  estimates |> 
+    ggplot() + 
+    geom_hline(yintercept = 0) +
+    geom_line(
+      mapping = aes(x = x, y = d0*200, group = .draw),
+      alpha = .02,
+      colour = "#00BFC4"
+    ) +
+    geom_line(
+      mapping = aes(x = x, y = d1*200, group = .draw),
+      alpha = .02,
+      colour = "#F8766D"
+    ) +
+    geom_point(
+      data = dat |> filter(y == 0),
+      mapping = aes(x = x, y = -.08),
+      shape = "|", 
+      alpha = .5,
+      colour = "#00BFC4"
+      ) + 
+    geom_point(
+      data = dat |> filter(y == 1),
+      mapping = aes(x = x, y = -.04),
+      shape = "|", 
+      alpha = .5,
+      colour = "#F8766D"
+      ) + 
+    geom_line(
+      mapping = aes(x = x, y = p, group = .draw),
+      alpha = .2
+      ) +
+    # xlim(1050,1550) + 
+    ylab("Posterior probability of maturity") + 
+    ggtitle(paste("L =", L, "U =", U))
+}
+```
+
+# Set priors single pop
+
+```{r}
+prior_m50_mu = 1300
+prior_m50_tau = 50
+prior_d_mu = 0
+prior_d_tau = 100
+prior_sigma_mu = 0
+prior_sigma_tau = 100
+```
+
+
+
+# Test model on simulated data
+
+## Simulate data
+
+```{r}
+# Simulate data
+n0 <- 50  # Number of samples for class 0
+n1 <- 5 * n0  # Number of samples for class 1
+L = 900
+U = 1600
+
+# Parameters for simulation
+m50_true <- 1300
+sigma_x_true <- 100
+d_true <- 300  # Distance factor between class 0 and 1 means
+
+# Simulated x values
+mu0_true <- m50_true - d_true / 2
+mu1_true <- m50_true + d_true / 2
+x0 <- c(
+  rnorm(n0/2, mean = mu0_true, sd = sigma_x_true),
+  rnorm(n0/2, mean = mu0_true - 250, sd = sigma_x_true*.5)
+)
+x1 <- c(
+  rnorm(n1/2, mean = mu1_true, sd = sigma_x_true),
+  rnorm(n1/2, mean = mu1_true + 250, sd = sigma_x_true*1.5)
+)
+
+data_fr <- tibble(
+    x = c(x0, x1),  
+    y = c(rep(0, n0), rep(1, n1))
+  ) |> 
+  filter(x > L & x < U)
+
+
+# Data for Stan
+data_list <- list(
+  N = nrow(data_fr),
+  x = data_fr$x,
+  y = data_fr$y,
+  L = L,
+  U = U,
+  prior_m50_mu = prior_m50_mu,
+  prior_m50_tau = prior_m50_tau,
+  prior_d_mu = prior_d_mu, 
+  prior_d_tau = prior_d_tau,
+  prior_sigma_mu = prior_sigma_mu,
+  prior_sigma_tau = prior_sigma_tau
+)
+```
+
+```{r}
+data.frame(x=data_list$x,y=data_list$y) |> 
+  ggplot() +
+  aes(x = x, fill = factor(y), group = y) +
+  geom_histogram(alpha = .5, col = NA, position = "identity") 
+```
+
+
+## Fit to simulated data
+
+```{r}
+#| cache: true
+ 
+# Fit the model using rstan
+fit <- sampling(
+  stan_uniform_gaussian_twogroups, 
+  data = data_list,
+  chains = 4,
+  cores = 4,
+  control = list(adapt_delta = 0.95)
+)
+
+fit
+```
+## Plot
+
+
+```{r}
+data.frame(x=data_list$x,y=data_list$y) |> 
+  ggplot() +
+  geom_histogram(
+    aes(x = x, y = after_stat(density), fill = factor(y), group = y),
+    alpha = .5, col = NA, position = "identity"
+    ) + 
+  geom_line(
+    data = fit |> 
+      as_draws_df() |> 
+      thin_draws(thin = 40) |> 
+      expand_grid(x = seq(from=850, to=1650, length=500)) |> 
+      rowwise() |> 
+      mutate(
+        p = uniform_left_gaussian_density(x, mu_0, sigma, L) 
+      ),
+    mapping = aes(x = x, y = p, group = .draw),
+    alpha = .1,
+    col=1
+  ) + 
+  geom_line(
+    data = fit |> 
+      as_draws_df() |> 
+      thin_draws(thin = 40) |> 
+      expand_grid(x = seq(from=850, to=1650, length=500)) |> 
+      rowwise() |> 
+      mutate(
+        p = uniform_right_gaussian_density(x, mu_1, sigma, U) 
+      ),
+    mapping = aes(x = x, y = p, group = .draw),
+    alpha = .1,
+    col=1
+  )
+```
+
+```{r}
+post <- get_estimates(fit, data_list$L, data_list$U, thin = 10)
+```
+
+```{r}
+plot_cutpoint_estimates(post)
+```
+
+```{r}
+plot_dist_transition(post, data_fr, data_list$L, data_list$U)
+```
+
+# Try on nz data
+
+## Data
+
+```{r}
+dat <- read_csv("Data/LHDC.csv") |> 
+  filter(!(Population == "Southwest Atlantic" & !is.na(OWt))) |> 
+  transmute(
+    Population,
+    Country,
+    Sex,
+    Stage = as_factor(LS_Score),
+    Length = TL
+  )
+```
+
+## Cut points 1050 & 1550
+
+### Fit model
+
+```{r}
+#| cache: true
+
+L = 1050
+U = 1550
+
+d_nz1 <- dat |> 
+  filter(Length > L & Length < U) |> 
+  filter(Population == "New Zealand" & Sex == "M") |> 
+  transmute(
+    x = Length,
+    y = as.numeric(Stage == 3 )
+  )
+
+d_nz1_list <- list( 
+  N = nrow(d_nz1),
+  x = d_nz1$x, 
+  y = d_nz1$y, 
+  L = L, 
+  U = U,
+  prior_m50_mu = prior_m50_mu,
+  prior_m50_tau = prior_m50_tau,
+  prior_d_mu = prior_d_mu, 
+  prior_d_tau = prior_d_tau,
+  prior_sigma_mu = prior_sigma_mu,
+  prior_sigma_tau = prior_sigma_tau
+  )
+```
+
+
+```{r}
+fit_d_nz1 <- sampling(
+  stan_uniform_gaussian_twogroups, 
+  data = d_nz1_list,
+  chains = 4,
+  cores = 4,
+  control = list(adapt_delta = 0.95)
+)
+```
+
+```{r}
+# Extract and summarize results
+print(fit_d_nz1)
+```
+### Summarise
+
+#### Get estimates
+
+```{r}
+post_d_nz1 <- get_estimates(fit_d_nz1, d_nz1_list$L, d_nz1_list$U)
+```
+
+#### Plot cutpoints
+
+```{r}
+plot_cutpoint_estimates(post_d_nz1)
+```
+
+#### Calculate probability of mature
+
+
+```{r}
+plot_dist_transition(post_d_nz1, d_nz1, d_nz1_list$L, d_nz1_list$U)
+```
+
+
+
+
+## Cut points 1050 & 1650
+
+### Fit model
+
+```{r}
+#| cache: true
+
+L = 1050
+U = 1650
+
+d_nz2 <- dat |> 
+  filter(Length > L & Length < U) |> 
+  filter(Population == "New Zealand" & Sex == "M") |> 
+  transmute(
+    x = Length,
+    y = as.numeric(Stage == 3 )
+  )
+
+d_nz2_list <- list( 
+  N = nrow(d_nz2),
+  x = d_nz2$x, 
+  y = d_nz2$y, 
+  L = L, 
+  U = U,
+  prior_m50_mu = prior_m50_mu,
+  prior_m50_tau = prior_m50_tau,
+  prior_d_mu = prior_d_mu, 
+  prior_d_tau = prior_d_tau,
+  prior_sigma_mu = prior_sigma_mu,
+  prior_sigma_tau = prior_sigma_tau
+  )
+```
+
+
+```{r}
+fit_d_nz2 <- sampling(
+  stan_uniform_gaussian_twogroups, 
+  data = d_nz2_list,
+  chains = 4,
+  cores = 4,
+  control = list(adapt_delta = 0.95)
+)
+```
+
+```{r}
+# Extract and summarize results
+print(fit_d_nz2)
+```
+### Summarise
+
+#### Get estimates
+
+```{r}
+post_d_nz2 <- get_estimates(fit_d_nz2, d_nz2_list$L, d_nz2_list$U)
+```
+
+#### Plot cutpoints
+
+```{r}
+plot_cutpoint_estimates(post_d_nz2)
+```
+
+#### Calculate probability of mature
+
+
+```{r}
+plot_dist_transition(post_d_nz2, d_nz2, d_nz2_list$L, d_nz2_list$U)
+```
+
+
+
+## Cutpoints 900 and 1650
+
+### Fit model
+
+```{r}
+#| cache: true
+
+L = 900
+U = 1650
+
+d_nz3 <- dat |> 
+  filter(Length > L & Length < U) |> 
+  filter(Population == "New Zealand" & Sex == "M") |> 
+  transmute(
+    x = Length,
+    y = as.numeric(Stage == 3 )
+  )
+
+d_nz3_list <- list( 
+  N = nrow(d_nz3),
+  x = d_nz3$x, 
+  y = d_nz3$y, 
+  L = L, 
+  U = U,
+  prior_m50_mu = prior_m50_mu,
+  prior_m50_tau = prior_m50_tau,
+  prior_d_mu = prior_d_mu, 
+  prior_d_tau = prior_d_tau,
+  prior_sigma_mu = prior_sigma_mu,
+  prior_sigma_tau = prior_sigma_tau
+  )
+```
+
+
+```{r}
+fit_d_nz3 <- sampling(
+  stan_uniform_gaussian_twogroups, 
+  data = d_nz3_list,
+  chains = 4,
+  cores = 4,
+  control = list(adapt_delta = 0.95)
+)
+```
+
+```{r}
+# Extract and summarize results
+print(fit_d_nz3)
+```
+
+### Summarise
+
+```{r}
+post_d_nz3 <- get_estimates(fit_d_nz3, d_nz3_list$L, d_nz3_list$U)
+```
+
+```{r}
+plot_cutpoint_estimates(post_d_nz3)
+```
+
+```{r}
+plot_dist_transition(post_d_nz3, d_nz3, d_nz3_list$L, d_nz3_list$U)
+```
+
+
+```{r}
+ggplot() + 
+  geom_hline(yintercept = 0) +
+  geom_density(
+    data = d_nz3,
+    mapping = aes(x = x, colour = factor(y), group = factor(y)),
+  ) +
+  geom_point(
+    data = d_nz3 |> filter(y == 0),
+    mapping = aes(x = x, y = -.0008),
+    shape = "|", 
+    alpha = .5,
+    colour = "#00BFC4"
+    ) + 
+  geom_point(
+    data = d_nz3 |> filter(y == 1),
+    mapping = aes(x = x, y = -.0004),
+    shape = "|", 
+    alpha = .5,
+    colour = "#F8766D"
+    ) + 
+  # xlim(1050,1550) + 
+  ylab("Posterior probability of maturity") + 
+  ggtitle("NZ data (truncated 900 to 1650)")
+```
+
+
+
+## Cutpoints 900 and 1550
+
+### Fit model
+
+```{r}
+#| cache: true
+
+L = 900
+U = 1550
+
+d_nz3b <- dat |> 
+  filter(Length > L & Length < U) |> 
+  filter(Population == "New Zealand" & Sex == "M") |> 
+  transmute(
+    x = Length,
+    y = as.numeric(Stage == 3 )
+  )
+
+d_nz3b_list <- list( 
+  N = nrow(d_nz3b),
+  x = d_nz3b$x, 
+  y = d_nz3b$y, 
+  L = L, 
+  U = U,
+  prior_m50_mu = prior_m50_mu,
+  prior_m50_tau = prior_m50_tau,
+  prior_d_mu = prior_d_mu, 
+  prior_d_tau = prior_d_tau,
+  prior_sigma_mu = prior_sigma_mu,
+  prior_sigma_tau = prior_sigma_tau
+  )
+```
+
+
+```{r}
+fit_d_nz3b <- sampling(
+  stan_uniform_gaussian_twogroups, 
+  data = d_nz3b_list,
+  chains = 4,
+  cores = 4,
+  control = list(adapt_delta = 0.95)
+)
+```
+
+```{r}
+# Extract and summarize results
+print(fit_d_nz3b)
+```
+
+### Summarise
+
+```{r}
+post_d_nz3b <- get_estimates(fit_d_nz3b, d_nz3b_list$L, d_nz3b_list$U)
+```
+
+```{r}
+plot_cutpoint_estimates(post_d_nz3b)
+```
+
+```{r}
+plot_dist_transition(post_d_nz3b, d_nz3b, d_nz3b_list$L, d_nz3b_list$U)
+```
+
+
+```{r}
+ggplot() + 
+  geom_hline(yintercept = 0) +
+  geom_density(
+    data = d_nz3b,
+    mapping = aes(x = x, colour = factor(y), group = factor(y)),
+  ) +
+  geom_point(
+    data = d_nz3b |> filter(y == 0),
+    mapping = aes(x = x, y = -.0008),
+    shape = "|", 
+    alpha = .5,
+    colour = "#00BFC4"
+    ) + 
+  geom_point(
+    data = d_nz3b |> filter(y == 1),
+    mapping = aes(x = x, y = -.0004),
+    shape = "|", 
+    alpha = .5,
+    colour = "#F8766D"
+    ) + 
+  # xlim(1050,1550) + 
+  ylab("Posterior probability of maturity") + 
+  ggtitle("NZ data (truncated 900 to 1550)")
+```
+
+
+## Cutpoints 400 and 1550
+
+### Fit model
+
+```{r}
+#| cache: true
+
+L = 400
+U = 1550
+
+d_nz4b <- dat |> 
+  filter(Length > L & Length < U) |> 
+  filter(Population == "New Zealand" & Sex == "M") |> 
+  transmute(
+    x = Length,
+    y = as.numeric(Stage == 3 )
+  )
+
+d_nz4b_list <- list( 
+  N = nrow(d_nz4b),
+  x = d_nz4b$x, 
+  y = d_nz4b$y, 
+  L = L, 
+  U = U,
+  prior_m50_mu = prior_m50_mu,
+  prior_m50_tau = prior_m50_tau,
+  prior_d_mu = prior_d_mu, 
+  prior_d_tau = prior_d_tau,
+  prior_sigma_mu = prior_sigma_mu,
+  prior_sigma_tau = prior_sigma_tau
+  )
+```
+
+
+```{r}
+fit_d_nz4b <- sampling(
+  stan_uniform_gaussian_twogroups, 
+  data = d_nz4b_list,
+  chains = 4,
+  cores = 4,
+  control = list(adapt_delta = 0.95)
+)
+```
+
+```{r}
+# Extract and summarize results
+print(fit_d_nz4b)
+```
+
+### Summarise
+
+```{r}
+post_d_nz4b <- get_estimates(fit_d_nz4b, d_nz4b_list$L, d_nz4b_list$U)
+```
+
+```{r}
+plot_cutpoint_estimates(post_d_nz4b)
+```
+
+```{r}
+plot_dist_transition(post_d_nz4b, d_nz4b, d_nz4b_list$L, d_nz4b_list$U)
+```
+
+
+## Cutpoints 400 and 1650
+
+### Fit model
+
+```{r}
+#| cache: true
+
+L = 400
+U = 1650
+
+d_nz4 <- dat |> 
+  filter(Length > L & Length < U) |> 
+  filter(Population == "New Zealand" & Sex == "M") |> 
+  transmute(
+    x = Length,
+    y = as.numeric(Stage == 3 )
+  )
+
+d_nz4_list <- list( 
+  N = nrow(d_nz4),
+  x = d_nz4$x, 
+  y = d_nz4$y, 
+  L = L, 
+  U = U,
+  prior_m50_mu = prior_m50_mu,
+  prior_m50_tau = prior_m50_tau,
+  prior_d_mu = prior_d_mu, 
+  prior_d_tau = prior_d_tau,
+  prior_sigma_mu = prior_sigma_mu,
+  prior_sigma_tau = prior_sigma_tau
+  )
+```
+
+
+```{r}
+fit_d_nz4 <- sampling(
+  stan_uniform_gaussian_twogroups, 
+  data = d_nz4_list,
+  chains = 4,
+  cores = 4,
+  control = list(adapt_delta = 0.95)
+)
+```
+
+```{r}
+# Extract and summarize results
+print(fit_d_nz4)
+```
+
+### Summarise
+
+```{r}
+post_d_nz4 <- get_estimates(fit_d_nz4, d_nz4_list$L, d_nz4_list$U)
+```
+
+```{r}
+plot_cutpoint_estimates(post_d_nz4)
+```
+
+```{r}
+plot_dist_transition(post_d_nz4, d_nz4, d_nz4_list$L, d_nz4_list$U)
+```
+
+## Summarise sensitivity to cutpoints
+
+```{r}
+
+bind_cols(
+  "L = 1050, U = 1550" = extract(fit_d_nz1)$m50, # d_nz1_list$L; d_nz1_list$U
+  "L = 1050, U = 1650" = extract(fit_d_nz2)$m50, # d_nz2_list$L; d_nz2_list$U
+  "L = 900, U = 1650" = extract(fit_d_nz3)$m50, # d_nz3_list$L; d_nz3_list$U
+  "L = 900, U = 1550" = extract(fit_d_nz3b)$m50, # d_nz3b_list$L; d_nz3b_list$U
+  "L = 400, U = 1650" = extract(fit_d_nz4)$m50,  # d_nz4_list$L; d_nz4_list$U
+  "L = 400, U = 1550" = extract(fit_d_nz4b)$m50  # d_nz4b_list$L; d_nz4b_list$U
+  ) |> 
+  pivot_longer(everything(), names_to = "Truncation values", values_to = "Transition point") |> 
+  ggplot() +
+  aes(x=`Transition point`, colour=`Truncation values`) + 
+  geom_density() +
+  ylab("Posterior density")
+
+```
+
+
+# J populations
+
+## Compile Stan code
+
+```{r}
+#| cache: true
+
+stan_uniform_gaussian_Jpopulations <- stan_model(file = 'uniform_gaussian_Jpopulations.stan')
+```
+
+## Print Stan model
+
+```{r}
+stan_uniform_gaussian_Jpopulations |> get_stancode() |> cat()
+```
+
+
+# Set priors J pop
+
+```{r}
+prior_mu_m50_mu = 1300
+prior_mu_m50_tau = 50
+prior_d_mu = 0
+prior_d_tau = 100
+prior_sigma_x_tau = 50
+prior_sigma_alpha_tau = 50
+```
+
+
+## Fit to actual data
+
+### Prepare data
+
+```{r}
+L = 1050
+U = 1550
+  
+d_pop <- dat |>
+  filter(Length > L & Length < U & Sex == "M" & Population != "Northeast Pacific") |>
+  transmute(
+    x = Length,
+    y = as.numeric(Stage == 3),
+    pop = Population |> as.factor() |> as.numeric()
+  )
+```
+
+```{r}
+d_pop_list <- list(
+    N = nrow(d_pop),
+    x = d_pop$x,
+    y = d_pop$y,
+    pop = d_pop$pop,
+    J = n_distinct(d_pop$pop),
+    U = U,
+    L = L,
+
+    prior_mu_m50_mu = prior_mu_m50_mu,
+    prior_mu_m50_tau = prior_mu_m50_tau,
+    prior_d_mu = prior_d_mu,
+    prior_d_tau = prior_d_tau,
+    prior_sigma_x_tau = prior_sigma_x_tau,
+    prior_sigma_alpha_tau = prior_sigma_alpha_tau
+    )
+```
+
+
+```{r}
+popkey <- dat |>
+  filter( Population != "Northeast Pacific" ) |>
+  transmute(
+    pop = Population |> as.factor() |> as.numeric(),
+    key = Population
+  ) |>
+  unique() |>
+  arrange(pop)
+
+popkey
+```
+
+### Fit model
+
+```{r}
+fit_d_pop <- sampling(
+  stan_uniform_gaussian_Jpopulations,
+  data = d_pop_list,
+  chains = 4,
+  # iter = 2000,
+  # warmup = 500,
+  cores = 4,
+  control = list(adapt_delta = 0.95)
+)
+```
+
+
+```{r}
+fit_d_pop
+```
+
+
+### Checking
+
+```{r}
+check_hmc_diagnostics(fit_d_pop)
+```
+```{r}
+fit_d_pop |>
+  mcmc_pairs(
+    pars = c(
+      "mu_m50",
+      # "m50_pop[1]", "m50_pop[2]","m50_pop[3]","m50_pop[4]","m50_pop[5]","m50_pop[6]",
+      "d", "sigma_x", "sigma_alpha")
+    )
+```
+
+```{r}
+#| fig-width: 20
+#| fig-height: 20
+
+fit_d_pop |>
+  mcmc_pairs(
+    pars = c(
+      "mu_m50",
+      "m50_pop[1]", "m50_pop[2]","m50_pop[3]","m50_pop[4]","m50_pop[5]"
+      # "d", "sigma_x", "sigma_alpha"
+      )
+    )
+```
+
+```{r}
+#| fig-width: 20
+#| fig-height: 20
+
+fit_d_pop |>
+  mcmc_pairs(
+    pars = c(
+      "mu_m50",
+      "alpha[1]", "alpha[2]","alpha[3]","alpha[4]","alpha[5]",
+      "d",
+      "sigma_x",
+      "sigma_alpha"
+      )
+    )
+```
+
+## Plot posterior distributions of transition points
+
+```{r}
+mcmc_areas(
+  fit_d_pop |> as.matrix(),
+  pars = c("mu_m50", "m50_pop[1]", "m50_pop[2]", "m50_pop[3]", "m50_pop[4]", "m50_pop[5]"),
+  prob = 0.8
+  ) +
+  scale_y_discrete(
+    labels = c(
+      "mu_m50" = "Overall mean",
+      "m50_pop[1]" = popkey$key[1],
+      "m50_pop[2]" = popkey$key[2],
+      "m50_pop[3]" = popkey$key[3],
+      "m50_pop[4]" = popkey$key[4],
+      "m50_pop[5]" = popkey$key[5])) +
+  xlab("Transition length")
+
+```
+
+
+
+<!-- ## Simulate data -->
+
+<!-- ```{r} -->
+
+<!-- # Simulate some data -->
+<!-- set.seed(123) -->
+<!-- N <- 1000  # Total number of data points -->
+<!-- J <- 5    # Number of populations -->
+<!-- pop <- sample(1:J, N, replace = TRUE) -->
+
+<!-- # Generate data for each population -->
+
+<!-- mu_m50 <- 1300 -->
+<!-- d <- 200 -->
+<!-- mu_mu0 <- mu_m50 - d / 2 -->
+<!-- mu_mu1 <- mu_m50 + d / 2 -->
+<!-- sigma_alpha <- 20 -->
+<!-- sigma_x <- 50 -->
+
+<!-- mu0_pop <- rnorm(J, mu_mu0, sigma_alpha) -->
+<!-- mu1_pop <- rnorm(J, mu_mu1, sigma_alpha) -->
+
+<!-- x <- numeric(N) -->
+<!-- y <- rbinom(N, 1, 0.5) -->
+
+<!-- for (i in 1:N) { -->
+<!--   if (y[i] == 0) { -->
+<!--     x[i] <- rnorm(1, mean=mu0_pop[pop[i]], sd=sigma_x) -->
+<!--   } else { -->
+<!--     x[i] <- rnorm(1, mean=mu1_pop[pop[i]], sd=sigma_x) -->
+<!--   } -->
+<!-- } -->
+
+
+<!-- # Prepare data for Stan -->
+<!-- data_list_populations <- list( -->
+<!--   N = N, -->
+<!--   x = x, -->
+<!--   y = y, -->
+<!--   J = J, -->
+<!--   pop = pop -->
+<!-- ) -->
+<!-- ``` -->
+
+
+<!-- ### Fit to simulated data -->
+
+<!-- ```{r} -->
+<!-- # Fit the model using rstan -->
+<!-- fit_populations <- sampling( -->
+<!--   stan_gen04_populations, -->
+<!--   data = data_list_populations, -->
+<!--   chains = 4, -->
+<!--   # iter = 2000, -->
+<!--   # warmup = 500, -->
+<!--   cores = 4, -->
+<!--   control = list(adapt_delta = 0.95) -->
+<!-- ) -->
+<!-- ``` -->
+

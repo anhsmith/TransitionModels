@@ -1,0 +1,139 @@
+---
+title: "Untitled"
+format: html
+---
+
+# Hof
+
+## Show
+
+```{r}
+plateau_hof_density <- function(y, m0, m1, lambda0, lambda1) {
+    C = m1 - m0;
+    (1 / C) * ( (1 / (1 + exp(-lambda0*(y - m0)))) - (1 / (1 + exp(-lambda1*(y - m1)))) )
+    }
+```
+
+
+```{r}
+tibble(y = 0:2000) |> 
+  mutate(
+    d = plateau_hof_density(y, 600, 1200, .01, 1)
+  ) |> 
+  ggplot() + 
+  aes(x=y,y=d) +
+  geom_line()
+```
+
+
+## Load data
+
+```{r}
+dat <- read_csv("Data/LHDC.csv") |> 
+  filter(!(Population == "Southwest Atlantic" & !is.na(OWt))) |> 
+  transmute(
+    Population,
+    Country,
+    Sex,
+    Stage = as_factor(LS_Score),
+    Length = TL
+  )
+```
+
+
+
+## Compile hof
+
+```{r}
+stan_plateau_hof <- stan_model(file = 'plateau_hof_density.stan')
+```
+
+## Fit to subset of data
+
+```{r}
+dat_nz3 <- dat |> 
+  filter(Population == "New Zealand" & Stage == "3" & Length < 1750) 
+```
+
+```{r}
+dat_nz3 |> ggplot() + aes(x = Length) + geom_histogram()
+```
+
+
+```{r}
+fit_hof_nz3 <- sampling(
+  stan_plateau_hof, 
+  data = list( N = nrow(dat_nz3), y = dat_nz3$Length ),
+  chains = 4,
+  # iter = 2000,
+  # warmup = 500,
+  cores = 4,
+  control = list(adapt_delta = 0.95)
+)
+```
+
+
+# Plateau normal
+
+
+```{r}
+plateau_density <- function(x, mu0, sigma0, mu1, sigma1) {
+  # Calculate the density at mu0 and mu1
+  height_mu0 <- dnorm(mu0, mean = mu0, sd = sigma0)
+  height_mu1 <- dnorm(mu1, mean = mu1, sd = sigma1)
+  
+  # Plateau height is the maximum of the two densities
+  plateau_height <- max(height_mu0, height_mu1)
+
+  # Apply scaling factor to the normal with the lower height to match the plateau
+  scale_mu0 <- plateau_height / height_mu0
+  scale_mu1 <- plateau_height / height_mu1
+
+  # Left tail: normal density before mu0, scaled if necessary
+  if (x < mu0) {
+    d <- dnorm(x, mean = mu0, sd = sigma0) * scale_mu0
+  } 
+  # Right tail: normal density after mu1, scaled if necessary
+  else if (x > mu1) {
+    d <- dnorm(x, mean = mu1, sd = sigma1) * scale_mu1
+  } 
+  # Plateau: uniform density between mu0 and mu1, matching the plateau height
+  else {
+    d <- plateau_height
+  }
+  
+  return(d)
+}
+
+
+```
+
+```{r}
+# Parameters for the plateau distribution
+mu0 <- 600    # Mean of the left normal
+sigma0 <- 30   # SD of the left normal
+mu1 <- 1000    # Mean of the right normal
+sigma1 <- 50   # SD of the right normal
+
+
+mu0m <- 1120    # Mean of the left normal
+sigma0m <- 50   # SD of the left normal
+mu1m <- 1500    # Mean of the right normal
+sigma1m <- 70   # SD of the right normal
+
+
+# Example data points
+x_vals <- seq(500, 1200, length.out = 1000)
+x_valsm <- seq(800, 1800, length.out = 1000)
+
+# Compute density for each data point
+densities <- sapply(x_vals, function(x) plateau_density(x, mu0, sigma0, mu1, sigma1))
+densitiesm <- sapply(x_valsm, function(x) plateau_density(x, mu0m, sigma0m, mu1m, sigma1m))
+
+
+# Plot the density
+plot(x_vals, densities, type = "l", main = "Plateau Distribution Density", xlab = "x", ylab = "Density")
+lines(x_valsm, densitiesm*1.65, col=2)
+
+```
+

@@ -1,0 +1,196 @@
+---
+title: "Generative Classifier Models 1"
+author: ""
+format: html
+editor: source
+---
+
+```{r}
+#| message: false
+library(tidyverse)
+library(rstan)
+library(truncnorm)
+```
+
+# Introduction
+
+This document was created with ChatGPT. It summarises two different generative classifier models for a two-class response and a continuous predictor, with the same standard deviation for both classes, and truncated scores. We discuss the mathematical structure of these models, how they differ, and provide code for fitting them using Stan and R.
+
+# Model 1: Simple Generative Classifier with Equal Priors
+
+## Mathematical Structure
+
+In this model, we assume that both classes follow a normal distribution with the same standard deviation but different means. The prior probabilities for both classes are equal.
+
+### Likelihood
+
+$$
+P(x | m=0) = \frac{1}{\sqrt{2 \pi \sigma^2}} \exp\left(-\frac{(x - \mu_0)^2}{2\sigma^2}\right)
+$$
+
+$$
+P(x | m=1) = \frac{1}{\sqrt{2 \pi \sigma^2}} \exp\left(-\frac{(x - \mu_1)^2}{2\sigma^2}\right)
+$$
+
+### Posterior Probability
+
+Given equal priors, the posterior probability is:
+
+$$
+P(m=0 | x) = \frac{P(x | m=0)}{P(x | m=0) + P(x | m=1)}
+$$
+
+## Stan Code
+
+```{r}
+stan_gen01 <- stan_model(file = 'gen01.stan')
+```
+
+## R Code to Fit the Model
+
+```{r}
+# Simulate some data
+set.seed(123)
+N0 <- 100
+N1 <- 20
+mu0 <- 1200
+mu1 <- 1400
+sigma <- 80
+x <- c(rnorm(N0, mu0, sigma), rnorm(N1, mu1, sigma))
+x <- pmin(pmax(x, 1100), 1500) # truncate
+m <- c(rep(0, N0), rep(1, N1))
+```
+
+```{r}
+data.frame(x,m) |> 
+  ggplot() +
+  aes(x=x,group=m, col=m) +
+  geom_density()
+```
+
+```{r}
+# Prepare data for Stan
+stan_data <- list(N = N0 + N1, x = x, m = m)
+
+# Fit the Stan model
+
+fit <- sampling(
+    stan_gen01, 
+    data = stan_data, 
+    chains=4
+    )
+  
+# Extract results
+print(fit, pars = c('mu0', 'mu1', 'sigma', 'm50'))
+```
+
+# Model 2: Hierarchical Generative Classifier with Population Structure
+
+## Mathematical Structure
+
+This model extends the simple generative classifier to multiple populations, each with its own means for the two classes, but sharing common hyperparameters.
+
+### Likelihood
+
+For population $j$:
+
+$$
+P(x | m=0, j) = \frac{1}{\sqrt{2 \pi \sigma^2}} \exp\left(-\frac{(x - \mu_{0j})^2}{2\sigma^2}\right)
+$$
+
+$$
+P(x | m=1, j) = \frac{1}{\sqrt{2 \pi \sigma^2}} \exp\left(-\frac{(x - \mu_{1j})^2}{2\sigma^2}\right)
+$$
+
+### Hierarchical Priors
+
+$$
+\mu_{0j} \sim \text{Normal}(\mu_{0, global}, \tau)
+$$
+
+$$
+\mu_{1j} \sim \text{Normal}(\mu_{1, global}, \tau)
+$$
+
+$$
+\sigma \sim \text{Normal}(0, 50)
+$$
+
+## Stan Code
+
+```{r}
+stan_gen02c <- stan_model(file = 'gen02c.stan')
+```
+
+## R Code to Fit the Model
+
+```{r}
+# Simulate some data
+set.seed(123)
+N <- 200  # Total number of data points
+J <- 5    # Number of populations
+pop <- sample(1:J, N, replace = TRUE)
+
+# Generate data for each population
+mu0_global <- 1200
+mu1_global <- 1400
+tau <- 50
+sigma <- 30
+
+mu0 <- rnorm(J, mu0_global, tau)
+mu1 <- rnorm(J, mu1_global, tau)
+
+x <- numeric(N)
+m <- rbinom(N, 1, 0.5)
+
+for (i in 1:N) {
+  if (m[i] == 0) {
+    x[i] <- rtruncnorm(1, a=1100, b=1500, mean=mu0[pop[i]], sd=sigma)
+  } else {
+    x[i] <- rtruncnorm(1, a=1100, b=1500, mean=mu1[pop[i]], sd=sigma)
+  }
+}
+
+L = 1100
+U = 1500
+
+# Prepare data for Stan
+stan_data <- list(
+  N = N,
+  x = x,
+  m = m,
+  J = J,
+  pop = pop,
+  L = L,
+  U = U
+)
+```
+
+```{r}
+# initial values
+inits = list(
+  list(mu0_global=1300, mu1_global=1300, tau = 5, sigma = 5)
+  )
+```
+
+```{r}
+# Fit the Stan model
+
+fit <- sampling(
+    stan_gen02c, 
+    data = stan_data, 
+    init = inits,
+    chains=1
+    )
+
+# Extract results
+print(fit, pars = c('mu0', 'mu1', 'sigma', 'm50', 'global_m50', 'p_m0_given_x', 'p_m1_given_x'))
+
+# Extract samples
+posterior <- extract(fit)
+
+# Example: Calculate the mean posterior probabilities for the first data point
+mean(posterior$p_m0_given_x[,1])
+mean(posterior$p_m1_given_x[,1])
+
+```

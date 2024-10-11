@@ -1,0 +1,654 @@
+---
+titlee: "Generative Classifier Models 4"
+author: ""
+format: 
+  html:
+    toc: true
+---
+
+```{r}
+#| message: false
+library(tidyverse)
+library(rstan)
+library(bayesplot)
+library(posterior)
+theme_set(theme_bw())
+```
+
+# Introduction
+
+# Load functions
+
+
+```{r}
+source("plateau_gaussian_density.R")
+```
+
+
+
+# Set up and test model 
+
+## Single population
+
+### Simulate data
+
+```{r}
+# Simulate data
+set.seed(12345)
+n0 <- 50  # Number of samples for class 0
+n1 <- 5 * n0  # Number of samples for class 1
+N <- n0 + n1
+
+# Parameters for simulation
+m50_true <- 1300
+sigma_x_true <- 100
+d_true <- 300  # Distance factor between class 0 and 1 means
+
+# Simulated x values
+mu0_true <- m50_true - d_true / 2
+mu1_true <- m50_true + d_true / 2
+x0 <- c(
+  rnorm(n0/2, mean = mu0_true, sd = sigma_x_true),
+  rnorm(n0/2, mean = mu0_true - 250, sd = sigma_x_true*.5)
+)
+x1 <- c(
+  rnorm(n1/2, mean = mu1_true, sd = sigma_x_true),
+  rnorm(n1/2, mean = mu1_true + 250, sd = sigma_x_true*1.5)
+)
+x <- c(x0, x1)
+
+# Simulated y values
+y <- c(rep(0, n0), rep(1, n1))
+
+# Data for Stan
+data_list <- list(
+  N = N,
+  x = x,
+  y = y
+)
+```
+
+```{r}
+data.frame(x=x,y=y) |> 
+  ggplot() +
+  aes(x = x, fill = factor(y), group = y) +
+  geom_histogram(alpha = .5, col = NA, position = "identity") 
+```
+
+### Compile Stan Code
+
+```{r}
+stan_plateau_gaussian_twogroups <- stan_model(file = 'plateau_gaussian_twogroups.stan')
+```
+
+### Fit to simulated data
+
+```{r}
+# Fit the model using rstan
+fit <- sampling(
+  stan_plateau_gaussian_twogroups, 
+  data = data_list,
+  chains = 4,
+  cores = 4,
+  control = list(adapt_delta = 0.95)
+)
+
+fit
+```
+### Plot
+
+
+```{r}
+data.frame(x=x,y=y) |> 
+  ggplot() +
+  geom_density(
+    aes(x = x, fill = factor(y), group = y),
+    alpha = .5, col = NA, position = "identity"
+    ) + 
+  geom_line(
+    data = fit |> 
+      as_draws_df() |> 
+      thin_draws(thin = 40) |> 
+      expand_grid(x = seq(from=800, to=2100, length=500)) |> 
+      rowwise() |> 
+      mutate(
+        p = plateau_gaussian_density(x, middle_1, delta_1, sigma_lo_1, sigma_up_1) 
+      ),
+    mapping = aes(x = x, y = p, group = .draw),
+    alpha = .1,
+    col=1
+  ) + 
+  geom_line(
+    data = fit |> 
+      as_draws_df() |> 
+      thin_draws(thin = 40) |> 
+      expand_grid(x = seq(from=800, to=2100, length=500)) |> 
+      rowwise() |> 
+      mutate(
+        p = plateau_gaussian_density(x, middle_0, delta_0, sigma_lo_0, sigma_up_0) 
+      ),
+    mapping = aes(x = x, y = p, group = .draw),
+    alpha = .1,
+    col=1
+  )
+```
+
+
+## Try on nz data
+
+### Data
+
+```{r}
+dat <- read_csv("Data/LHDC.csv") |> 
+  filter(!(Population == "Southwest Atlantic" & !is.na(OWt))) |> 
+  transmute(
+    Population,
+    Country,
+    Sex,
+    Stage = as_factor(LS_Score),
+    Length = TL
+  )
+```
+
+### Fit model
+
+```{r}
+d_nz <- dat |> 
+  filter(Length > 1050 & Length < 1650) |> 
+  filter(Population == "New Zealand" & Sex == "M") |> 
+  transmute(
+    x = Length,
+    y = as.numeric(Stage == 3 )
+  )
+```
+
+
+```{r}
+fit_d_nz <- sampling(
+  stan_plateau_gaussian_twogroups, 
+  data = list( N = nrow(d_nz), x = d_nz$x, y = d_nz$y ),
+  chains = 4,
+  cores = 4,
+  control = list(adapt_delta = 0.95)
+)
+```
+
+```{r}
+# Extract and summarize results
+print(fit_d_nz, pars = c("m50", "sigma_lo_1", "d"))
+```
+
+
+```{r}
+# Plot posterior distribution of m50
+posterior_d_nz <- extract(fit_d_nz)$m50
+ggplot(data.frame(m50 = posterior_d_nz), aes(x = m50)) +
+  geom_density() +
+  ggtitle("Posterior distribution of m50 for NZ males") +
+  theme_minimal()
+
+```
+
+#### Calculate probability of mature
+
+```{r}
+
+fit_d_nz |> 
+  as_draws_df() |> 
+  thin_draws(thin = 40) |> 
+  expand_grid(x = seq(from=1050, to=1650, length=1000)) |> 
+  rowwise() |> 
+  mutate(
+    d0 = plateau_gaussian_density(x, middle_0, delta_0, sigma_lo_0, sigma_up_0),
+    d1 = plateau_gaussian_density(x, middle_1, delta_1, sigma_lo_1, sigma_up_1),
+    n0 = d0 *
+      c_plateau_gaussian_density(delta_0, sigma_lo_0, sigma_up_0),
+    n1 = d1 *
+      c_plateau_gaussian_density(delta_1, sigma_lo_1, sigma_up_1),
+    p = n1 / ( n0 + n1 )
+  ) |> 
+  ggplot() + 
+  geom_hline(yintercept = 0) +
+  geom_line(
+    mapping = aes(x = x, y = d0*100, group = .draw),
+    alpha = .02,
+    colour = "#00BFC4"
+  ) +
+  geom_line(
+    mapping = aes(x = x, y = d1*100, group = .draw),
+    alpha = .02,
+    colour = "#F8766D"
+  ) +
+  geom_point(
+    data = d_nz |> filter(y == 0),
+    mapping = aes(x = x, y = -.08),
+    shape = "|", 
+    alpha = .5,
+    colour = "#00BFC4"
+    ) + 
+  geom_point(
+    data = d_nz |> filter(y == 1),
+    mapping = aes(x = x, y = -.04),
+    shape = "|", 
+    alpha = .5,
+    colour = "#F8766D"
+    ) + 
+  geom_line(
+    mapping = aes(x = x, y = p, group = .draw),
+    alpha = .2
+    ) +
+  # xlim(1050,1550) + 
+  ylab("Posterior probability of maturity") + 
+  ggtitle("NZ data")
+
+```
+
+
+
+### Try on nz data with cutpoints 900 and 1650
+
+#### Fit model
+
+```{r}
+d_nz2 <- dat |> 
+  filter(Length > 900 & Length < 1650) |> 
+  filter(Population == "New Zealand" & Sex == "M") |> 
+  transmute(
+    x = Length,
+    y = as.numeric(Stage == 3 )
+  )
+```
+
+
+```{r}
+fit_d_nz2 <- sampling(
+  stan_plateau_gaussian_twogroups, 
+  data = list( N = nrow(d_nz2), x = d_nz2$x, y = d_nz2$y ),
+  chains = 4,
+  cores = 4,
+  control = list(adapt_delta = 0.95)
+)
+```
+
+```{r}
+# Extract and summarize results
+print(fit_d_nz2)
+```
+
+
+```{r}
+# Plot posterior distribution of m50
+posterior_d_nz2 <- extract(fit_d_nz2)$m50
+ggplot(data.frame(m50 = posterior_d_nz2), aes(x = m50)) +
+  geom_density() +
+  ggtitle("Posterior distribution of m50 for NZ males") +
+  theme_minimal()
+
+```
+
+#### Calculate probability of mature
+
+```{r}
+
+fit_d_nz2  |> 
+  as_draws_df() |> 
+  thin_draws(thin = 40) |> 
+  expand_grid(x = seq(from=900, to=1650, length=1000)) |> 
+  rowwise() |> 
+  mutate(
+    d0 = plateau_gaussian_density(x, middle_0, delta_0, sigma_lo_0, sigma_up_0),
+    d1 = plateau_gaussian_density(x, middle_1, delta_1, sigma_lo_1, sigma_up_1),
+    n0 = d0 *
+      c_plateau_gaussian_density(delta_0, sigma_lo_0, sigma_up_0),
+    n1 = d1 *
+      c_plateau_gaussian_density(delta_1, sigma_lo_1, sigma_up_1),
+    p = n1 / ( n0 + n1 )
+  ) |> 
+  ggplot() + 
+  geom_hline(yintercept = 0) +
+  geom_line(
+    mapping = aes(x = x, y = d0*100, group = .draw),
+    alpha = .02,
+    colour = "#00BFC4"
+  ) +
+  geom_line(
+    mapping = aes(x = x, y = d1*100, group = .draw),
+    alpha = .02,
+    colour = "#F8766D"
+  ) +
+  geom_point(
+    data = d_nz2 |> filter(y == 0),
+    mapping = aes(x = x, y = -.08),
+    shape = "|", 
+    alpha = .5,
+    colour = "#00BFC4"
+    ) + 
+  geom_point(
+    data = d_nz2 |> filter(y == 1),
+    mapping = aes(x = x, y = -.04),
+    shape = "|", 
+    alpha = .5,
+    colour = "#F8766D"
+    ) + 
+  geom_line(
+    mapping = aes(x = x, y = p, group = .draw),
+    alpha = .2
+    ) +
+  # xlim(1050,1550) + 
+  ylab("Posterior probability of maturity") + 
+  ggtitle("NZ data (truncated 900 to 1650)")
+
+
+
+```
+
+
+```{r}
+ggplot() + 
+  geom_hline(yintercept = 0) +
+  geom_density(
+    data = d_nz2,
+    mapping = aes(x = x, colour = factor(y), group = factor(y)),
+  ) +
+  geom_point(
+    data = d_nz2 |> filter(y == 0),
+    mapping = aes(x = x, y = -.0008),
+    shape = "|", 
+    alpha = .5,
+    colour = "#00BFC4"
+    ) + 
+  geom_point(
+    data = d_nz2 |> filter(y == 1),
+    mapping = aes(x = x, y = -.0004),
+    shape = "|", 
+    alpha = .5,
+    colour = "#F8766D"
+    ) + 
+  # xlim(1050,1550) + 
+  ylab("Posterior probability of maturity") + 
+  ggtitle("NZ data (truncated 900 to 1650)")
+```
+
+
+### Try on nz data with cutpoints 400 and 1650
+
+#### Fit model
+
+```{r}
+d_nz3 <- dat |> 
+  filter(Length > 400 & Length < 1650) |> 
+  filter(Population == "New Zealand" & Sex == "M") |> 
+  transmute(
+    x = Length,
+    y = as.numeric(Stage == 3 )
+  )
+```
+
+
+```{r}
+fit_d_nz3 <- sampling(
+  stan_plateau_gaussian_twogroups, 
+  data = list( N = nrow(d_nz3), x = d_nz3$x, y = d_nz3$y ),
+  chains = 4,
+  cores = 4,
+  control = list(adapt_delta = 0.95)
+)
+```
+
+```{r}
+# Extract and summarize results
+print(fit_d_nz3)
+```
+
+## J populations
+
+### Compile Stan code
+
+```{r}
+stan_gen04_populations <- stan_model(file = 'gen04_populations.stan')
+```
+### Simulate data
+
+```{r}
+
+# Simulate some data
+set.seed(123)
+N <- 1000  # Total number of data points
+J <- 5    # Number of populations
+pop <- sample(1:J, N, replace = TRUE)
+
+# Generate data for each population
+
+mu_m50 <- 1300
+d <- 200
+mu_mu0 <- mu_m50 - d / 2
+mu_mu1 <- mu_m50 + d / 2
+sigma_alpha <- 20
+sigma_x <- 50
+
+mu0_pop <- rnorm(J, mu_mu0, sigma_alpha)
+mu1_pop <- rnorm(J, mu_mu1, sigma_alpha)
+
+x <- numeric(N)
+y <- rbinom(N, 1, 0.5)
+
+for (i in 1:N) {
+  if (y[i] == 0) {
+    x[i] <- rnorm(1, mean=mu0_pop[pop[i]], sd=sigma_x)
+  } else {
+    x[i] <- rnorm(1, mean=mu1_pop[pop[i]], sd=sigma_x)
+  }
+}
+
+
+# Prepare data for Stan
+data_list_populations <- list(
+  N = N,
+  x = x,
+  y = y,
+  J = J,
+  pop = pop
+)
+```
+
+
+### Fit to simulated data
+
+```{r}
+# Fit the model using rstan
+fit_populations <- sampling(
+  stan_gen04_populations, 
+  data = data_list_populations,
+  chains = 4,
+  # iter = 2000,
+  # warmup = 500,
+  cores = 4,
+  control = list(adapt_delta = 0.95)
+)
+```
+
+
+
+# Maturity
+
+## Fit to actual data
+
+### Prepare data 
+
+```{r}
+d_pop <- dat |> 
+  filter(Length > 1050 & Length < 1550 & Sex == "M" & Population != "Northeast Pacific") |> 
+  transmute(
+    x = Length,
+    y = as.numeric(Stage == 3),
+    pop = Population |> as.factor() |> as.numeric()
+  )
+```
+
+```{r}
+popkey <- dat |> 
+  filter( Population != "Northeast Pacific" ) |> 
+  transmute(
+    pop = Population |> as.factor() |> as.numeric(),
+    key = Population
+  ) |> 
+  unique() |> 
+  arrange(pop)
+
+popkey
+```
+
+### Fit model
+
+```{r}
+fit_d_pop <- sampling(
+  stan_gen04_populations, 
+  data = list( 
+    N = nrow(d_pop), 
+    x = d_pop$x, 
+    y = d_pop$y, 
+    pop = d_pop$pop, 
+    J = n_distinct(d_pop$pop),
+    
+    prior_mu_m50_mu = 1300,
+    prior_mu_m50_sigma = 100,
+  
+    prior_d_mu = 200,
+    prior_d_sigma = 50,
+  
+    prior_sigma_x_sigma = 50,
+    prior_sigma_alpha_sigma = 50
+    
+    ),
+  chains = 4,
+  # iter = 2000,
+  # warmup = 500,
+  cores = 4,
+  control = list(adapt_delta = 0.95)
+)
+```
+
+
+```{r}
+fit_d_pop
+```
+
+```{r}
+popkey |>
+  bind_cols(m50 = c(1292.91,1289.70,1274.39,1285.80,1238.32 ))
+```
+
+### Checking
+
+```{r}
+check_hmc_diagnostics(fit_d_pop)
+```
+```{r}
+fit_d_pop |> 
+  mcmc_pairs(
+    pars = c(
+      "mu_m50", 
+      # "m50_pop[1]", "m50_pop[2]","m50_pop[3]","m50_pop[4]","m50_pop[5]","m50_pop[6]",
+      "d", "sigma_x", "sigma_alpha")
+    )
+```
+
+```{r}
+#| fig-width: 20
+#| fig-height: 20
+
+fit_d_pop |> 
+  mcmc_pairs(
+    pars = c(
+      "mu_m50",
+      "m50_pop[1]", "m50_pop[2]","m50_pop[3]","m50_pop[4]","m50_pop[5]"
+      # "d", "sigma_x", "sigma_alpha"
+      )
+    )
+```
+
+```{r}
+#| fig-width: 20
+#| fig-height: 20
+
+fit_d_pop |> 
+  mcmc_pairs(
+    pars = c(
+      "mu_m50",
+      "alpha[1]", "alpha[2]","alpha[3]","alpha[4]","alpha[5]",
+      "d",
+      "sigma_x",
+      "sigma_alpha"
+      )
+    )
+```
+
+
+
+```{r}
+mcmc_areas(
+  fit_d_pop |> as.matrix(),
+  pars = c("mu_m50", "m50_pop[1]", "m50_pop[2]", "m50_pop[3]", "m50_pop[4]", "m50_pop[5]"),
+  prob = 0.8
+  ) +
+  scale_y_discrete(
+    labels = c(
+      "mu_m50" = "Overall mean",
+      "m50_pop[1]" = popkey$key[1], 
+      "m50_pop[2]" = popkey$key[2], 
+      "m50_pop[3]" = popkey$key[3], 
+      "m50_pop[4]" = popkey$key[4], 
+      "m50_pop[5]" = popkey$key[5])) +
+  xlab("Transition length")
+  
+```
+
+# Birth
+
+
+```{r}
+#| fig-height: 8
+#| fig-width: 6
+
+dat |> 
+  filter( Length < 500 & !is.na(Sex) ) |>
+  ggplot() +
+  aes(x = Length, fill = factor(Stage), group = Stage) +
+  geom_density(alpha = .5, col = NA) + 
+  facet_grid(
+    cols = vars(Sex),
+    rows = vars(Population),
+    scales = "free_y"
+    ) 
+```
+
+
+```{r}
+#| fig-height: 8
+#| fig-width: 6
+
+dat |> 
+  filter( Length < 500 & !is.na(Sex) ) |>
+  ggplot() +
+  aes(x = Length, fill = factor(Stage), group = Stage) +
+  geom_histogram(alpha = .5, col = NA, position = "identity") + 
+  facet_grid(
+    cols = vars(Sex),
+    rows = vars(Population)
+    ) 
+```
+
+
+```{r}
+#| fig-height: 8
+#| fig-width: 6
+
+dat |> 
+  filter( Length > 150 & Length < 450 ) |>
+  ggplot() +
+  aes(x = Length, fill = factor(Stage), group = Stage) +
+  geom_histogram(alpha = .5, col = NA, position = "identity") + 
+  facet_grid(
+    rows = vars(Population)
+    ) 
+```
