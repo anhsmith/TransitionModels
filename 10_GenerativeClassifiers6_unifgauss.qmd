@@ -2,6 +2,7 @@
 title: "Uniform-Gaussian Generative Classifier"
 author: "Adam Smith"
 date: today
+bibliography: refs.bib
 format: 
   html:
     toc: true
@@ -45,7 +46,9 @@ What is required is a generative model that is (1) robust to unbalanced sample s
 
 ## Solution
 
-Here, we overcome these challenges by fitting a mixture of a Gaussian and a uniform distribution. The left ($y = 0$) group is modelled with a uniform on the left that begins at the lower truncation value. The distribution remains flat until it approaches the transition range, at which point the distribution declines according to a Gaussian. The right ($y = 1$) group increases according to a Gaussian distribution and then levels off to a uniform, terminating at the upper truncation value. 
+Here, we overcome these challenges by fitting a mixture of a Gaussian and a uniform distribution. The left ($y = 0$) group is modelled with a uniform on the left that begins at the lower truncation value. The distribution remains flat until it approaches the transition range, at which point the distribution declines according to a Gaussian. The right ($y = 1$) group increases according to a Gaussian distribution and then levels off to a uniform, terminating at the upper truncation value.
+
+The PDF of the uniform-Gaussian was modified from the PDF uniform and two Guassians in Lau & Krumscheid [-@lau_plateau_2022].
 
 # Summary from ChatGPT
 
