@@ -17,15 +17,6 @@ library(posterior)
 theme_set(theme_bw())
 ```
 
-```{r}
-#| fig-width: 5
-#| fig-height: 10
-
-# graph code
-
-```
-
-
 # Introduction
 
 ## Problem
@@ -387,11 +378,18 @@ fit <- sampling(
 
 fit
 ```
+
+```{r}
+# saveRDS(fit, file = "fit.rds")
+# readRDS(fit)
+```
+
+
 ## Plot
 
 
 ```{r}
-data.frame(x=data_list$x,y=data_list$y) |> 
+ggfit <- data.frame(x=data_list$x,y=data_list$y) |> 
   ggplot() +
   geom_histogram(
     aes(x = x, y = after_stat(density), fill = factor(y), group = y),
@@ -401,7 +399,7 @@ data.frame(x=data_list$x,y=data_list$y) |>
     data = fit |> 
       as_draws_df() |> 
       thin_draws(thin = 40) |> 
-      expand_grid(x = seq(from=850, to=1650, length=500)) |> 
+      expand_grid(x = seq(from=850, to=1650, length=10000)) |> 
       rowwise() |> 
       mutate(
         p = uniform_left_gaussian_density(x, mu_0, sigma, L) 
@@ -414,7 +412,7 @@ data.frame(x=data_list$x,y=data_list$y) |>
     data = fit |> 
       as_draws_df() |> 
       thin_draws(thin = 40) |> 
-      expand_grid(x = seq(from=850, to=1650, length=500)) |> 
+      expand_grid(x = seq(from=850, to=1650, length=10000)) |> 
       rowwise() |> 
       mutate(
         p = uniform_right_gaussian_density(x, mu_1, sigma, U) 
@@ -423,7 +421,20 @@ data.frame(x=data_list$x,y=data_list$y) |>
     alpha = .1,
     col=1
   )
+
+ggfit
 ```
+## Make plot for web
+
+```{r}
+ggfitnice <- ggfit + theme_void() + theme(legend.position = "none")
+```
+
+```{r}
+ggsave("plotnice.png", ggfitnice, width=6, height=4)
+```
+
+## Get stats
 
 ```{r}
 post <- get_estimates(fit, data_list$L, data_list$U, thin = 10)
